@@ -1,0 +1,2321 @@
+:root {
+  --bg-dark: #0e1420;
+  --panel-bg: rgba(15, 23, 38, 0.92);
+  --panel-border: rgba(212, 175, 55, 0.45);
+  --gold: #f0c659;
+  --gold-bright: #ffe58f;
+  --teal: #38e4c5;
+  --accent-blue: #4ea8ff;
+  --text-main: #eef3fb;
+  --text-muted: #9eb0cb;
+  --danger: #ff6b6b;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+html,
+body,
+#game-root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0a0f18;
+  color: var(--text-main);
+  font-family: 'Segoe UI', 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+#game-canvas:active {
+  cursor: grabbing;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ===== 開場標題畫面 ===== */
+.overlay-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, rgba(16, 30, 52, 0.72), rgba(7, 11, 20, 0.94));
+  backdrop-filter: blur(8px);
+}
+
+.title-card {
+  width: min(640px, 92vw);
+  padding: 40px 36px;
+  border-radius: 22px;
+  background: linear-gradient(155deg, rgba(20, 31, 52, 0.96), rgba(11, 17, 30, 0.98));
+  border: 2px solid var(--panel-border);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.65), 0 0 40px rgba(240, 198, 89, 0.14);
+  text-align: center;
+}
+
+.ring-emblem {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  border: 4px solid var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: var(--gold-bright);
+  background: radial-gradient(circle, rgba(240, 198, 89, 0.22), rgba(10, 16, 28, 0.8));
+  box-shadow: 0 0 24px rgba(240, 198, 89, 0.4);
+}
+
+.title-logo {
+  font-size: 42px;
+  font-weight: 900;
+  letter-spacing: 5px;
+  background: linear-gradient(180deg, #fff4c8 0%, #f0c659 55%, #b58122 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 6px;
+}
+
+.title-sub {
+  font-size: 15px;
+  color: var(--teal);
+  letter-spacing: 2px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.title-desc {
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.75;
+  margin-bottom: 26px;
+}
+
+.title-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.gi-btn {
+  padding: 12px 24px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.gi-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.08);
+}
+
+.gi-btn:active {
+  transform: translateY(0);
+}
+
+.gi-btn-primary {
+  background: linear-gradient(135deg, #27b99b, #1d87a8);
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(39, 185, 155, 0.32);
+}
+
+.gi-btn-gold {
+  background: linear-gradient(135deg, #f0c659, #c58822);
+  color: #1b1305;
+  box-shadow: 0 8px 22px rgba(240, 198, 89, 0.3);
+}
+
+.gi-btn-ghost {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--text-muted);
+}
+
+.gi-btn-danger {
+  background: rgba(255, 107, 107, 0.16);
+  border-color: rgba(255, 107, 107, 0.45);
+  color: #ffc2c2;
+}
+
+.controls-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 18px;
+}
+
+kbd {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gold-bright);
+  margin: 0 2px;
+}
+
+/* ===== HUD ===== */
+#hud {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.hud-top-left {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.zone-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 1px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.zone-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 10px var(--teal);
+}
+
+.stats-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.stat-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(12, 19, 32, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pill-label {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.jenny-pill #hud-jenny {
+  color: var(--gold-bright);
+}
+
+.cards-pill #hud-specified-count {
+  color: var(--teal);
+}
+
+.free-pill #hud-free-count {
+  color: var(--accent-blue);
+}
+
+.quest-tracker {
+  max-width: 340px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(12, 19, 32, 0.84);
+  border-left: 3px solid var(--gold);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.quest-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--gold);
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.quest-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-main);
+}
+
+.hud-top-right {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 8px;
+  border-radius: 16px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45);
+}
+
+#minimap-canvas {
+  border-radius: 10px;
+  display: block;
+}
+
+.minimap-caption {
+  font-size: 11px;
+  color: var(--gold);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.interact-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 92px;
+  transform: translateX(-50%);
+  z-index: 12;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: rgba(14, 24, 42, 0.92);
+  border: 1.5px solid var(--gold);
+  box-shadow: 0 0 24px rgba(240, 198, 89, 0.35);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: floatPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes floatPulse {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-4px); }
+}
+
+.hud-bottom-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  pointer-events: auto;
+}
+
+.hud-bottom-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.action-chip {
+  padding: 9px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(14, 22, 38, 0.88);
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.action-chip:hover {
+  border-color: var(--gold);
+  background: rgba(26, 38, 62, 0.96);
+  transform: translateY(-2px);
+}
+
+/* ===== BOOK / GAIN 召喚特效 ===== */
+.shout-fx {
+  position: fixed;
+  top: 44%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 90;
+  font-size: 72px;
+  font-weight: 900;
+  letter-spacing: 10px;
+  color: #fff6cf;
+  text-shadow: 0 0 20px #f0c659, 0 0 48px #38e4c5, 0 6px 18px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  animation: shoutPop 0.72s ease-out forwards;
+}
+
+.shout-fx.gain-fx {
+  color: #d4fff7;
+  text-shadow: 0 0 22px #38e4c5, 0 0 54px #4ea8ff, 0 6px 18px rgba(0, 0, 0, 0.8);
+}
+
+@keyframes shoutPop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  25% { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }
+  75% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.25); }
+}
+
+/* ===== Toast 通知 ===== */
+#toast-container {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(480px, calc(100vw - 32px));
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast-item {
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: rgba(14, 24, 42, 0.95);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+  text-align: center;
+  animation: toastIn 0.25s ease-out;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== 彈窗共用 ===== */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 10, 18, 0.7);
+  backdrop-filter: blur(5px);
+}
+
+.close-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--text-main);
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* ===== NPC 對話框 ===== */
+.dialog-box {
+  width: min(560px, 92vw);
+  padding: 24px 26px;
+  border-radius: 18px;
+  background: linear-gradient(160deg, rgba(19, 30, 50, 0.98), rgba(11, 18, 32, 0.98));
+  border: 2px solid var(--panel-border);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.65);
+}
+
+.dialog-speaker {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 8px;
+  background: rgba(240, 198, 89, 0.18);
+  border: 1px solid rgba(240, 198, 89, 0.45);
+  color: var(--gold-bright);
+  font-weight: 800;
+  font-size: 14px;
+  margin-bottom: 14px;
+}
+
+.dialog-text {
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--text-main);
+  margin-bottom: 20px;
+  white-space: pre-line;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* ===== 瑪莎多拉商店 ===== */
+.shop-panel {
+  width: min(820px, 94vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 24px 28px;
+  border-radius: 20px;
+  background: linear-gradient(165deg, rgba(20, 28, 48, 0.98), rgba(11, 16, 28, 0.98));
+  border: 2px solid var(--panel-border);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.7);
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.panel-header h2 {
+  font-size: 22px;
+  color: var(--gold-bright);
+}
+
+.panel-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.shop-balance {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 10px;
+  background: rgba(240, 198, 89, 0.12);
+  border: 1px solid rgba(240, 198, 89, 0.35);
+  font-size: 14px;
+  margin-bottom: 18px;
+}
+
+.shop-balance strong {
+  color: var(--gold-bright);
+}
+
+.shop-products {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.product-card {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pack-visual {
+  width: 104px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  text-align: center;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+}
+
+.pack-standard {
+  background: linear-gradient(155deg, #1d6b8f, #113452);
+  box-shadow: 0 8px 20px rgba(29, 107, 143, 0.35);
+}
+
+.pack-rare {
+  background: linear-gradient(155deg, #b8841f, #4c2e08);
+  border-color: var(--gold-bright);
+  box-shadow: 0 8px 22px rgba(240, 198, 89, 0.35);
+}
+
+.pack-tag {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  opacity: 0.85;
+}
+
+.pack-title {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.pack-count {
+  font-size: 10px;
+  opacity: 0.9;
+}
+
+.product-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.product-info h3 {
+  font-size: 16px;
+  color: var(--text-main);
+}
+
+.product-info p {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.pack-reveal {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.reveal-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--teal);
+  margin-bottom: 12px;
+}
+
+.reveal-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  justify-items: center;
+}
+
+.reveal-card-wrap {
+  width: 100%;
+  max-width: 224px;
+  animation: cardFlipIn 0.38s ease-out;
+}
+
+@keyframes cardFlipIn {
+  from { opacity: 0; transform: scale(0.82) rotateY(45deg); }
+  to { opacity: 1; transform: scale(1) rotateY(0deg); }
+}
+
+.reveal-card .rc-no {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.reveal-card .rc-icon {
+  font-size: 32px;
+  margin: 8px 0;
+}
+
+.reveal-card .rc-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--gold-bright);
+  margin-bottom: 4px;
+}
+
+.reveal-card .rc-rank {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ===== No.101 島的地圖選單 ===== */
+.map-city-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.map-city-card {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.map-city-card h3 {
+  font-size: 15px;
+  color: var(--gold-bright);
+}
+
+.map-city-dir {
+  font-size: 11px;
+  color: var(--teal);
+  font-weight: 700;
+}
+
+.map-city-card p {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ===== BOOK！無外框懸浮實體精裝集卡書（亞麻布紋硬殼＋厚棉紙頁＋霧面古銅金屬＋書溝曲率陰影） ===== */
+#hud {
+  transition: opacity 0.22s ease;
+}
+
+body.book-is-open #hud {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.book-floating-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 42;
+  background: radial-gradient(circle at 50% 48%, rgba(12, 16, 24, 0.14) 0%, rgba(8, 10, 16, 0.52) 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 28px 38px;
+  cursor: pointer;
+}
+
+.book-floating-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 50px;
+  max-width: 97vw;
+  max-height: 90vh;
+  perspective: 1800px;
+}
+
+/* 當右側浮出實體卡時，書本略微收斂比例，確保即使 1024px 寬度也完全並排不重疊 */
+.book-floating-stage.has-floating-card {
+  gap: 46px;
+}
+
+.book-floating-stage.has-floating-card .physical-binder {
+  width: min(740px, 62vw);
+  height: min(540px, 78vh);
+}
+
+.book-floating-stage.has-floating-card .card-flip-scene {
+  width: min(252px, 24vw, 36vh);
+}
+
+.book-spread-viewport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+}
+
+.book-ambient-hint {
+  position: fixed;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11.5px;
+  letter-spacing: 0.6px;
+  color: rgba(242, 238, 224, 0.72);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.92);
+  pointer-events: none;
+  user-select: none;
+}
+
+.book-ambient-hint kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  margin: 0 2px;
+  border-radius: 4px;
+  background: rgba(18, 22, 32, 0.58);
+  border: 1px solid rgba(235, 228, 204, 0.32);
+  color: #f4efd8;
+  font-family: Consolas, monospace;
+  font-size: 10.5px;
+}
+
+/* 實體精裝書本體：亞麻布紋硬殼＋厚棉紙疊頁＋霧面古銅活頁環（零 UI 外框） */
+.physical-binder {
+  width: min(860px, 82vw);
+  height: min(620px, 82vh);
+  aspect-ratio: 1.4 / 1;
+  display: grid;
+  grid-template-columns: 1fr 24px 1fr;
+  padding: 11px 16px 13px;
+  border-radius: 9px;
+  /* 霧面礦物染亞麻精裝布殼＋編織紋理（徹底去除塑膠亮面） */
+  background-color: #3b405d;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' seed='9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.18'/%3E%3C/svg%3E"),
+    repeating-linear-gradient(0deg, rgba(255, 252, 240, 0.03) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(10, 12, 22, 0.06) 0 1px, transparent 1px 3px),
+    linear-gradient(155deg, #484d6c 0%, #3a3f5c 52%, #2c3048 100%);
+  border: 2px solid #202336;
+  box-shadow:
+    0 28px 64px rgba(0, 0, 0, 0.72),
+    0 8px 20px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(205, 210, 232, 0.14),
+    inset 0 -3px 6px rgba(12, 14, 24, 0.52);
+  position: relative;
+  transform: rotateX(2.4deg);
+  transform-style: preserve-3d;
+  transition: transform 0.25s ease;
+}
+
+.physical-binder.turn-anim-next .binder-page-right {
+  animation: bookLeafNext 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.physical-binder.turn-anim-prev .binder-page-left {
+  animation: bookLeafPrev 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes bookLeafNext {
+  0% {
+    transform-origin: left center;
+    transform: rotateY(-14deg);
+    filter: brightness(0.92);
+  }
+  100% {
+    transform-origin: left center;
+    transform: rotateY(0deg);
+    filter: brightness(1);
+  }
+}
+
+@keyframes bookLeafPrev {
+  0% {
+    transform-origin: right center;
+    transform: rotateY(14deg);
+    filter: brightness(0.92);
+  }
+  100% {
+    transform-origin: right center;
+    transform: rotateY(0deg);
+    filter: brightness(1);
+  }
+}
+
+/* 厚棉紙書頁本體（紙纖微噪點＋自然弧面陰影＋左右層疊紙頁厚度） */
+.binder-page {
+  background-color: #e5e1cf;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' seed='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)' opacity='0.14'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #eae6d6 0%, #e3decb 60%, #dbd5c0 100%);
+  border: 1px solid #aba48f;
+  padding: 13px 14px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 書頁物理弧度光影（書溝深陷陰影＋頁面微隆柔光） */
+.binder-page::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.binder-page-left {
+  border-radius: 3px 1px 1px 3px;
+  box-shadow:
+    -2px 0 0 #d5cfb9,
+    -4px 0 0 #c1ba9f,
+    -6px 0 0 #d2ccb6,
+    -8px 0 0 #b2ab91,
+    -10px 1px 4px rgba(15, 13, 10, 0.42);
+}
+
+.binder-page-left::after {
+  background: linear-gradient(
+    90deg,
+    rgba(52, 45, 32, 0.14) 0%,
+    rgba(52, 45, 32, 0.03) 3%,
+    rgba(255, 252, 242, 0.16) 14%,
+    rgba(255, 252, 242, 0) 56%,
+    rgba(255, 252, 244, 0.22) 76%,
+    rgba(46, 39, 26, 0.1) 88%,
+    rgba(26, 21, 14, 0.28) 95%,
+    rgba(16, 13, 9, 0.54) 100%
+  );
+}
+
+.binder-page-right {
+  border-radius: 1px 3px 3px 1px;
+  box-shadow:
+    2px 0 0 #d5cfb9,
+    4px 0 0 #c1ba9f,
+    6px 0 0 #d2ccb6,
+    8px 0 0 #b2ab91,
+    10px 1px 4px rgba(15, 13, 10, 0.42);
+}
+
+.binder-page-right::after {
+  background: linear-gradient(
+    270deg,
+    rgba(52, 45, 32, 0.14) 0%,
+    rgba(52, 45, 32, 0.03) 3%,
+    rgba(255, 252, 242, 0.16) 14%,
+    rgba(255, 252, 242, 0) 56%,
+    rgba(255, 252, 244, 0.22) 76%,
+    rgba(46, 39, 26, 0.1) 88%,
+    rgba(26, 21, 14, 0.28) 95%,
+    rgba(16, 13, 9, 0.54) 100%
+  );
+}
+
+/* 書頁底部霧面鉛字頁碼（直接印於棉紙上，預留左右折角翻頁箭頭空間） */
+.binder-page-folio {
+  position: absolute;
+  bottom: 5px;
+  left: 28px;
+  right: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: Georgia, 'Times New Roman', 'PMingLiU', serif;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  color: rgba(74, 68, 54, 0.72);
+  pointer-events: none;
+  z-index: 6;
+}
+
+.binder-page-folio.folio-right {
+  justify-content: flex-end;
+}
+
+.folio-stat {
+  font-family: 'Microsoft JhengHei', sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  opacity: 0.78;
+}
+
+/* 嵌入書頁左右外緣的折角翻頁熱區 */
+.page-turn-corner {
+  position: absolute;
+  bottom: 0;
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  z-index: 8;
+  display: flex;
+  align-items: flex-end;
+  padding: 5px 8px;
+  color: rgba(72, 65, 50, 0.58);
+  transition: color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.page-turn-corner.turn-prev {
+  left: 0;
+  justify-content: flex-start;
+  background: linear-gradient(45deg, rgba(160, 152, 130, 0.34) 0%, rgba(160, 152, 130, 0.08) 42%, transparent 52%);
+}
+
+.page-turn-corner.turn-next {
+  right: 0;
+  justify-content: flex-end;
+  background: linear-gradient(315deg, rgba(160, 152, 130, 0.34) 0%, rgba(160, 152, 130, 0.08) 42%, transparent 52%);
+}
+
+.page-turn-corner:hover:not(:disabled) {
+  color: #2b271e;
+}
+
+.page-turn-corner.turn-prev:hover:not(:disabled) {
+  background: linear-gradient(45deg, rgba(140, 131, 108, 0.58) 0%, rgba(246, 242, 228, 0.8) 46%, transparent 54%);
+}
+
+.page-turn-corner.turn-next:hover:not(:disabled) {
+  background: linear-gradient(315deg, rgba(140, 131, 108, 0.58) 0%, rgba(246, 242, 228, 0.8) 46%, transparent 54%);
+}
+
+.page-turn-corner:disabled {
+  opacity: 0.12;
+  cursor: default;
+  background: transparent;
+}
+
+.turn-glyph {
+  font-family: Georgia, serif;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* 中央深凹布紋書脊＋霧面髮絲紋古銅黃銅三連活頁扣 */
+.binder-spine {
+  background-color: #24273b;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.12) 0 1px, transparent 1px 3px),
+    linear-gradient(90deg, #171926 0%, #2d3149 48%, #171926 100%);
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.72);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  align-items: center;
+  position: relative;
+  z-index: 7;
+}
+
+.spine-hinge {
+  width: 30px;
+  height: 18px;
+  border-radius: 2.5px;
+  /* 霧面拉絲古銅黃銅（取代亮面塑膠黃條） */
+  background-color: #9c8d58;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255, 248, 222, 0.08) 0 1px, rgba(0, 0, 0, 0.14) 1px 2px),
+    linear-gradient(180deg, #b6a66e 0%, #988953 48%, #74673c 100%);
+  border: 1.2px solid #3f3820;
+  box-shadow:
+    0 3px 7px rgba(0, 0, 0, 0.56),
+    inset 0 1px 0 rgba(236, 226, 178, 0.35),
+    inset 0 -1px 1px rgba(45, 39, 20, 0.65);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hinge-pin {
+  width: 11px;
+  height: 8px;
+  border-radius: 1.5px;
+  background: linear-gradient(180deg, #524829, #6e623a);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+.spine-bottom-clasp {
+  position: absolute;
+  bottom: -11px;
+  width: 30px;
+  height: 14px;
+  border-radius: 12px 12px 3px 3px;
+  background: linear-gradient(180deg, #b5a66f 0%, #8e7f4b 65%, #695e35 100%);
+  border: 1.2px solid #352f1b;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.55);
+}
+
+/* 附於書本右側書口的實體紙質索引書籤標籤 */
+.binder-index-tabs {
+  position: absolute;
+  top: 28px;
+  right: -34px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: -1;
+}
+
+.binder-index-tab {
+  width: 38px;
+  padding: 13px 6px 13px 10px;
+  border: 1.2px solid rgba(28, 24, 18, 0.68);
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 3px;
+  font-family: 'PMingLiU', 'Songti TC', 'Microsoft JhengHei', serif;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  position: relative;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Cfilter id='t'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' seed='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23t)' opacity='0.18'/%3E%3C/svg%3E");
+  box-shadow:
+    inset 6px 0 8px -5px rgba(0, 0, 0, 0.55),
+    4px 4px 10px rgba(0, 0, 0, 0.42);
+  transition: transform 0.16s ease, filter 0.16s ease;
+}
+
+.binder-index-tab:hover {
+  transform: translateX(4px);
+  filter: brightness(1.07);
+}
+
+.binder-index-tab.active {
+  transform: translateX(7px);
+  box-shadow:
+    inset 4px 0 6px -4px rgba(0, 0, 0, 0.45),
+    6px 6px 14px rgba(0, 0, 0, 0.52);
+}
+
+.binder-index-tab.tab-cover {
+  background-color: #484d6c;
+  color: #e9e4cf;
+}
+
+.binder-index-tab.tab-specified {
+  background-color: #7d3645;
+  color: #f2ebd8;
+}
+
+.binder-index-tab.tab-free {
+  background-color: #b49a5a;
+  color: #262013;
+}
+
+.binder-index-tab.tab-catalog {
+  background-color: #3a3d43;
+  color: #e6e0cc;
+}
+
+/* 第 1 跨頁左頁：單獨置中的 000 凹槽（精準 63:88 比例，對齊動畫 Greed_Island_Book_Slots.png） */
+.zero-slot-stage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.slot-zero-hero {
+  width: 42% !important;
+  max-width: 154px;
+  height: auto !important;
+  aspect-ratio: 63 / 88;
+}
+
+/* 3×3 與 3×2（圖鑑左頁）凹槽網格 */
+.binder-3x3-grid {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: center;
+  justify-items: center;
+}
+
+.binder-3x2-grid {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  align-items: center;
+  justify-items: center;
+}
+
+.binder-recess-slot {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  aspect-ratio: 63 / 88;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  border-radius: 3px;
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.binder-recess-slot:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.02);
+  z-index: 3;
+}
+
+.binder-recess-slot:disabled {
+  cursor: default;
+}
+
+.binder-recess-slot.is-selected {
+  outline: 2px solid #966e85;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(150, 110, 133, 0.28), 0 6px 14px rgba(0, 0, 0, 0.35);
+  z-index: 4;
+}
+
+/* 原作霧面黑絨紙壓凹十字準線卡槽（去除亮面塑膠反光） */
+.recess-empty-pocket {
+  width: 100%;
+  height: 100%;
+  background-color: #1c1e20;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' seed='5'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)' opacity='0.14'/%3E%3C/svg%3E"),
+    linear-gradient(150deg, #17191b 0%, #202225 100%);
+  border-top: 1.5px solid #6b6759;
+  border-left: 1.5px solid #757163;
+  border-right: 1.5px solid #f4f1e2;
+  border-bottom: 1.5px solid #f4f1e2;
+  border-radius: 2px;
+  box-shadow:
+    inset 2px 3px 7px rgba(0, 0, 0, 0.82),
+    inset -1px -1px 3px rgba(255, 255, 255, 0.04);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.recess-empty-pocket.recess-free {
+  background-color: #1a1d22;
+}
+
+.cross-line {
+  position: absolute;
+  background: rgba(196, 198, 188, 0.38);
+  pointer-events: none;
+}
+
+.cross-top {
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 31%;
+  transform: translateX(-50%);
+}
+
+.cross-bottom {
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  height: 31%;
+  transform: translateX(-50%);
+}
+
+.cross-left {
+  left: 0;
+  top: 50%;
+  height: 1px;
+  width: 18%;
+  transform: translateY(-50%);
+}
+
+.cross-right {
+  right: 0;
+  top: 50%;
+  height: 1px;
+  width: 18%;
+  transform: translateY(-50%);
+}
+
+.recess-code {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: clamp(13px, 1.5vw, 19px);
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #c8ccc1;
+}
+
+.recess-empty-pocket.recess-large {
+  width: 224px;
+  height: 312px;
+  border-radius: 6px;
+  border: 3px solid #2b2d30;
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.72), inset 2px 3px 12px rgba(0, 0, 0, 0.85);
+}
+
+.recess-empty-pocket.recess-large .recess-code {
+  font-size: 36px;
+}
+
+/* 封底內頁：霧面鑲嵌式咒語卡發動插槽與復古 CRT 目標螢幕 */
+.page-back-reader {
+  background-color: #d6d2c0;
+}
+
+.spell-reader-console {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 2px 8px;
+}
+
+.spell-crt-screen {
+  flex: 1;
+  border-radius: 5px;
+  padding: 12px;
+  background-color: #0b1811;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.24) 0 1px, transparent 1px 3px),
+    radial-gradient(circle at 50% 45%, #11261b 0%, #07120c 100%);
+  border: 3px solid #484a4d;
+  box-shadow:
+    inset 0 2px 14px rgba(0, 0, 0, 0.88),
+    0 1px 0 rgba(255, 252, 240, 0.55);
+  font-family: 'Consolas', 'Courier New', monospace;
+  color: #6ee49b;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.crt-header {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(110, 228, 155, 0.32);
+  color: #9ff5be;
+}
+
+.crt-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.spell-reader-slot-area {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 4px;
+  background: rgba(58, 54, 44, 0.12);
+  border: 1.2px solid #9d9682;
+  box-shadow: inset 1px 2px 4px rgba(0, 0, 0, 0.14);
+}
+
+.spell-insert-slot {
+  width: clamp(36px, 11vh, 98px);
+  flex-shrink: 0;
+  aspect-ratio: 63 / 88;
+}
+
+.book-spell-controls {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.book-spell-controls select {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 6px;
+  color: #dbfae6;
+  background: #11261b;
+  border: 1px solid #4b8f64;
+  border-radius: 4px;
+  font: inherit;
+}
+
+.book-spell-status {
+  margin: 2px 0 0;
+  line-height: 1.4;
+}
+
+.crt-enter-btn {
+  padding: 10px 14px;
+  border-radius: 5px;
+  border: 1.5px solid #204a32;
+  background: linear-gradient(180deg, #2d7a4f, #1e5737);
+  color: #e6f7ec;
+  font-weight: 900;
+  font-size: 12.5px;
+  cursor: pointer;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.crt-enter-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 封面獨立實體書狀態（零外框、零多餘說明面板） */
+.book-cover-object {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.book-cover-card {
+  width: min(398px, 54dvh, 74vw);
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  filter: drop-shadow(0 28px 46px rgba(0, 0, 0, 0.72));
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.book-cover-card:hover {
+  transform: translateY(-5px);
+}
+
+.gi-book-cover-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* 書頁內原作圖鑑（直接印在左頁頂端 1/3 的棉紙目錄表頭） */
+.page-catalog-left {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.catalog-paper-header {
+  height: 31%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 4px 4px 7px;
+  border-bottom: 1.2px solid rgba(94, 86, 68, 0.35);
+}
+
+.catalog-paper-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-family: Georgia, serif;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+  color: #363229;
+}
+
+.catalog-paper-count {
+  font-size: 10.5px;
+  color: #6b6352;
+}
+
+.catalog-paper-filters {
+  display: flex;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.paper-filter-chip {
+  flex: 1;
+  padding: 3px 4px;
+  border-radius: 3px;
+  border: 1px solid rgba(78, 71, 56, 0.42);
+  background: rgba(248, 245, 232, 0.52);
+  color: #3a352b;
+  font-size: 10.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.paper-filter-chip:hover {
+  background: rgba(255, 253, 244, 0.9);
+}
+
+.paper-filter-chip.active {
+  background: #3b405d;
+  border-color: #26293d;
+  color: #f3efdc;
+}
+
+.paper-filter-chip.chip-red.active {
+  background: #82223d;
+  border-color: #541225;
+}
+
+.paper-filter-chip.chip-blue.active {
+  background: #22418a;
+  border-color: #152a5c;
+}
+
+.paper-filter-chip.chip-yellow.active {
+  background: #966e14;
+  border-color: #61460a;
+}
+
+.paper-filter-chip.chip-black.active {
+  background: #23252a;
+  border-color: #0e1014;
+}
+
+.catalog-paper-search {
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-bottom: 1.5px solid rgba(72, 66, 52, 0.55);
+  border-radius: 2px 2px 0 0;
+  background: rgba(252, 249, 238, 0.65);
+  color: #24211a;
+  font-size: 11.5px;
+  font-weight: 600;
+  outline: none;
+  user-select: text;
+}
+
+.catalog-paper-search::placeholder {
+  color: rgba(88, 81, 66, 0.62);
+}
+
+.catalog-paper-search:focus {
+  border-bottom-color: #3b405d;
+  background: rgba(255, 253, 246, 0.92);
+}
+
+.catalog-paper-empty {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5e5746;
+}
+
+.catalog-slot-placeholder {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 63 / 88;
+  border-radius: 3px;
+  border: 1px dashed rgba(120, 112, 92, 0.25);
+}
+
+/* ===== 原作實卡（63:88 比例，霧面厚卡紙紋＋三段米白凹角花框＋手繪插畫＋四色大理石紋＋圓框漢字印章） ===== */
+.gi-real-card {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 63 / 88;
+  background: #1b1c1f;
+  border-radius: 6px;
+  padding: 3.8%;
+  display: grid;
+  grid-template-rows: 13.5% 47.5% 39%;
+  gap: 2.2%;
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.58),
+    0 2px 5px rgba(0, 0, 0, 0.42),
+    inset 0 0 0 1px rgba(248, 244, 228, 0.09);
+  text-align: left;
+  color: #17191c;
+  overflow: hidden;
+  box-sizing: border-box;
+  position: relative;
+}
+
+/* 實卡表面極細微霧面印刷紙紋（消除數位塑膠光澤） */
+.gi-real-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' seed='8'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)' opacity='0.11'/%3E%3C/svg%3E");
+  mix-blend-mode: multiply;
+  z-index: 4;
+}
+
+.gi-card-mini {
+  border-radius: 3px;
+  padding: 3.2%;
+  gap: 2%;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.42);
+}
+
+/* 100% 原作官方實卡原圖模式（無額外 CSS 畫框或濾鏡遮擋原圖） */
+.gi-real-card.gi-card-photo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border-radius: 6px;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.gi-real-card.gi-card-photo::after {
+  display: none;
+}
+
+.gi-card-mini.gi-card-photo {
+  border-radius: 3px;
+}
+
+.gi-card-scan-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  border-radius: inherit;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.floating-card-caption {
+  width: min(252px, 24vw, 36vh);
+  padding: 7px 11px;
+  border-radius: 8px;
+  background: rgba(16, 19, 28, 0.78);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(235, 228, 202, 0.24);
+  color: #f0ebd8;
+  text-align: left;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.42);
+}
+
+.floating-caption-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: #f6e7b8;
+  margin-bottom: 3px;
+}
+
+.floating-caption-meta {
+  margin-bottom: 5px;
+  font-size: 10px;
+  color: #c2c9db;
+}
+
+.floating-caption-desc {
+  font-size: 11px;
+  line-height: 1.45;
+  color: #d6d9e4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 頂部三段式米白凹角花框 */
+.gi-card-top {
+  display: grid;
+  grid-template-columns: 23% 1fr 27%;
+  gap: 2px;
+  min-height: 0;
+}
+
+.gi-plaque {
+  position: relative;
+  background-color: #eae6cf;
+  border: 1.2px solid #181a1d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  /* 四角凹角切口裝飾 */
+  background-image:
+    radial-gradient(circle 4px at 0 0, #1b1c1f 62%, #eae6cf 68%, transparent 72%),
+    radial-gradient(circle 4px at 100% 0, #1b1c1f 62%, #eae6cf 68%, transparent 72%),
+    radial-gradient(circle 4px at 0 100%, #1b1c1f 62%, #eae6cf 68%, transparent 72%),
+    radial-gradient(circle 4px at 100% 100%, #1b1c1f 62%, #eae6cf 68%, transparent 72%);
+}
+
+.gi-plaque::after {
+  content: '';
+  position: absolute;
+  inset: 1.5px;
+  border: 0.8px solid rgba(25, 28, 32, 0.65);
+  pointer-events: none;
+}
+
+.gi-plaque-inner {
+  position: relative;
+  z-index: 1;
+  font-family: 'Georgia', 'Times New Roman', 'PMingLiU', 'Songti TC', serif;
+  color: #16181a;
+  font-weight: 900;
+  line-height: 1.05;
+  text-align: center;
+  padding: 0 2px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gi-card-full .gi-plaque-no .gi-plaque-inner {
+  font-size: 16px;
+}
+
+.gi-card-full .gi-plaque-rank .gi-plaque-inner {
+  font-size: 14px;
+}
+
+.gi-card-full .gi-card-en {
+  display: block;
+  font-size: 7.5px;
+  font-weight: 700;
+  color: #4b4f56;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gi-card-full .gi-card-zh {
+  display: block;
+  font-size: 12px;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gi-card-pack .gi-plaque-no .gi-plaque-inner {
+  font-size: 12px;
+}
+
+.gi-card-pack .gi-plaque-rank .gi-plaque-inner {
+  font-size: 11px;
+}
+
+.gi-card-pack .gi-card-zh {
+  font-size: 10.5px;
+}
+
+.gi-card-mini .gi-card-top {
+  grid-template-columns: 29% 1fr 31%;
+  gap: 1px;
+}
+
+.gi-card-mini .gi-plaque {
+  border-width: 0.8px;
+  background-image:
+    radial-gradient(circle 2.4px at 0 0, #1a1b1e 62%, transparent 70%),
+    radial-gradient(circle 2.4px at 100% 0, #1a1b1e 62%, transparent 70%),
+    radial-gradient(circle 2.4px at 0 100%, #1a1b1e 62%, transparent 70%),
+    radial-gradient(circle 2.4px at 100% 100%, #1a1b1e 62%, transparent 70%);
+}
+
+.gi-card-mini .gi-plaque::after {
+  display: none;
+}
+
+.gi-card-mini .gi-plaque-inner {
+  padding: 0 1px;
+  letter-spacing: -0.3px;
+}
+
+.gi-card-mini .gi-plaque-no .gi-plaque-inner {
+  font-size: 6.5px;
+}
+
+.gi-card-mini .gi-plaque-rank .gi-plaque-inner {
+  font-size: 6px;
+}
+
+.gi-card-mini .gi-card-zh {
+  font-size: 6.5px;
+}
+
+/* 中段米白厚卡襯底與手繪插畫框 */
+.gi-card-art-mat {
+  background: #e8e7d3;
+  padding: 3.4%;
+  display: flex;
+  min-height: 0;
+}
+
+.gi-card-art-window {
+  flex: 1;
+  border: 1.6px solid #17191c;
+  overflow: hidden;
+  background: #235888;
+  display: flex;
+}
+
+.gi-card-mini .gi-card-art-window {
+  border-width: 1px;
+}
+
+.gi-art-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* 底部大理石紋四色框（紅／藍／黃／黑，精準對齊官方實卡掃描質感） */
+.gi-card-desc-marble {
+  padding: 5.5%;
+  display: flex;
+  min-height: 0;
+  position: relative;
+}
+
+.gi-marble-red .gi-card-desc-marble {
+  background-color: #7d1134;
+  background-image:
+    radial-gradient(ellipse 30% 44% at 14% 22%, rgba(235, 84, 128, 0.82), transparent 72%),
+    radial-gradient(ellipse 36% 28% at 76% 18%, rgba(212, 46, 98, 0.78), transparent 70%),
+    radial-gradient(ellipse 28% 40% at 88% 82%, rgba(242, 102, 146, 0.8), transparent 72%),
+    radial-gradient(ellipse 34% 34% at 24% 86%, rgba(186, 26, 76, 0.85), transparent 74%),
+    radial-gradient(ellipse 22% 26% at 52% 52%, rgba(64, 7, 26, 0.9), transparent 76%);
+}
+
+.gi-marble-blue .gi-card-desc-marble {
+  background-color: #162e75;
+  background-image:
+    radial-gradient(ellipse 32% 44% at 15% 20%, rgba(92, 144, 240, 0.84), transparent 72%),
+    radial-gradient(ellipse 38% 30% at 78% 16%, rgba(46, 94, 212, 0.82), transparent 70%),
+    radial-gradient(ellipse 30% 42% at 86% 84%, rgba(114, 166, 250, 0.8), transparent 72%),
+    radial-gradient(ellipse 36% 32% at 22% 86%, rgba(36, 76, 186, 0.86), transparent 74%),
+    radial-gradient(ellipse 24% 28% at 50% 50%, rgba(10, 22, 62, 0.9), transparent 76%);
+}
+
+.gi-marble-yellow .gi-card-desc-marble {
+  background-color: #825b0b;
+  background-image:
+    radial-gradient(ellipse 32% 44% at 16% 20%, rgba(250, 218, 92, 0.88), transparent 72%),
+    radial-gradient(ellipse 38% 30% at 78% 18%, rgba(224, 174, 42, 0.82), transparent 70%),
+    radial-gradient(ellipse 30% 42% at 86% 84%, rgba(255, 232, 128, 0.85), transparent 72%),
+    radial-gradient(ellipse 36% 32% at 24% 86%, rgba(186, 132, 22, 0.86), transparent 74%),
+    radial-gradient(ellipse 24% 28% at 50% 50%, rgba(72, 46, 4, 0.9), transparent 76%);
+}
+
+.gi-marble-black .gi-card-desc-marble {
+  background-color: #141518;
+  background-image:
+    radial-gradient(ellipse 30% 42% at 16% 20%, rgba(138, 142, 152, 0.72), transparent 72%),
+    radial-gradient(ellipse 36% 30% at 78% 18%, rgba(86, 90, 98, 0.78), transparent 70%),
+    radial-gradient(ellipse 30% 42% at 86% 84%, rgba(154, 158, 168, 0.7), transparent 72%),
+    radial-gradient(ellipse 34% 32% at 24% 86%, rgba(68, 72, 80, 0.82), transparent 74%),
+    radial-gradient(ellipse 24% 28% at 50% 50%, rgba(8, 9, 11, 0.95), transparent 76%);
+}
+
+.gi-card-desc-paper {
+  flex: 1;
+  background: #f2f3f5;
+  border: 1.8px solid #17191c;
+  padding: 5.5% 6.5%;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.gi-card-mini .gi-card-desc-paper {
+  border-width: 1px;
+  padding: 4% 5%;
+}
+
+.gi-card-desc-text {
+  margin: 0;
+  color: #16181c;
+  font-family: 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+  font-weight: 600;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
+
+.gi-card-full .gi-card-desc-text {
+  font-size: 11px;
+  line-height: 1.48;
+  -webkit-line-clamp: 6;
+}
+
+.gi-card-pack .gi-card-desc-text {
+  font-size: 9px;
+  line-height: 1.38;
+  -webkit-line-clamp: 5;
+}
+
+.gi-card-mini .gi-card-desc-text {
+  font-size: 5.5px;
+  line-height: 1.25;
+  -webkit-line-clamp: 4;
+  opacity: 0.78;
+}
+
+/* 原作右下角「圓框漢字印章」（近／遠／通／攻／防／継／対／反／特） */
+.gi-card-stamps {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: flex;
+  gap: 3px;
+}
+
+.gi-kanji-stamp {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #181a1d;
+  color: #121417;
+  font-family: 'PMingLiU', 'Songti TC', 'Microsoft JhengHei', serif;
+  font-size: 12px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-shadow: 0 0 3px 1px rgba(132, 244, 162, 0.75);
+}
+
+.gi-card-pack .gi-kanji-stamp {
+  width: 17px;
+  height: 17px;
+  font-size: 10px;
+  border-width: 1.6px;
+}
+
+.gi-card-mini .gi-card-stamps {
+  right: 2px;
+  bottom: 2px;
+  gap: 1.5px;
+}
+
+.gi-card-mini .gi-kanji-stamp {
+  width: 10px;
+  height: 10px;
+  font-size: 6.5px;
+  border-width: 1px;
+  box-shadow: none;
+}
+
+.gi-real-card.gi-card-back-face {
+  display: block;
+  padding: 0;
+  border-radius: 4% / 2.9%;
+  background: #131316;
+}
+
+.gi-card-back-face::after {
+  display: none;
+}
+
+/* 顯示 408 × 490 原圖中的卡片範圍 (58, 37, 289, 409)。 */
+.gi-card-back-photo {
+  position: absolute;
+  width: calc(100% * 408 / 289);
+  height: calc(100% * 490 / 409);
+  left: calc(-100% * 58 / 289);
+  top: calc(-100% * 37 / 409);
+  max-width: none;
+  display: block;
+  user-select: none;
+}
+
+.owned-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #2b7f6b;
+  border: 1.5px solid #f2eedc;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 6;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+/* ===== 無外框浮出實卡預覽與極簡操作（僅點擊卡槽時浮現，無黑底視窗框） ===== */
+.book-floating-card-popover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  animation: cardPopFloat 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes cardPopFloat {
+  from {
+    opacity: 0;
+    transform: translateX(-14px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.floating-card-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.floating-card-dismiss {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(238, 232, 210, 0.55);
+  background: rgba(24, 26, 36, 0.86);
+  color: #efe9d4;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55);
+  transition: transform 0.14s ease, background 0.14s ease;
+}
+
+.floating-card-dismiss:hover {
+  transform: scale(1.08);
+  background: #3b405d;
+}
+
+.card-flip-scene {
+  width: min(268px, 34vh);
+  aspect-ratio: 63 / 88;
+  perspective: 1100px;
+  filter: drop-shadow(0 24px 44px rgba(0, 0, 0, 0.72));
+}
+
+.card-flip-inner {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  cursor: pointer;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+
+.card-flip-inner.flipped {
+  transform: rotateY(180deg);
+}
+
+.card-flip-front,
+.card-flip-back {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+}
+
+.card-flip-back {
+  transform: rotateY(180deg);
+}
+
+.floating-card-actions {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 7px;
+}
+
+.floating-pill-btn {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(235, 228, 202, 0.38);
+  background: rgba(20, 23, 34, 0.78);
+  backdrop-filter: blur(6px);
+  color: #f3eed9;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  transition: transform 0.14s ease, background 0.14s ease, border-color 0.14s ease;
+}
+
+.floating-pill-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(46, 51, 76, 0.92);
+  border-color: rgba(235, 228, 202, 0.72);
+}
+
+.floating-pill-btn.pill-gain {
+  background: linear-gradient(180deg, rgba(44, 134, 108, 0.94), rgba(28, 94, 76, 0.96));
+  border-color: rgba(164, 238, 212, 0.58);
+  color: #f4fff9;
+}
+
+/* ===== 傳送閃光 ===== */
+.transition-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: radial-gradient(circle, #ffffff 0%, #8bf4ff 45%, #1c4e80 100%);
+  animation: flashFade 0.85s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes flashFade {
+  0% { opacity: 0; }
+  25% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (max-width: 820px) {
+  .book-floating-stage {
+    gap: 20px;
+  }
+  .physical-binder {
+    width: min(680px, 86vw);
+    height: min(490px, 74vh);
+  }
+  .book-floating-stage.has-floating-card .book-floating-card-popover {
+    position: fixed;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 20;
+  }
+  .reveal-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.book-floating-backdrop {
+  padding-top: 54px;
+  overflow: auto;
+}
+
+.book-chrome {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  width: min(860px, calc(100% - 28px));
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px 0 12px;
+  z-index: 25;
+  color: #f2edda;
+  background: rgba(21, 23, 36, 0.92);
+  border: 1px solid #747183;
+  border-radius: 6px;
+  cursor: default;
+}
+
+.book-chrome-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.book-chrome-title strong {
+  font: 700 16px Georgia, serif;
+  letter-spacing: 0.12em;
+}
+
+.book-chrome-title span,
+.book-chrome-progress {
+  font-size: 11px;
+}
+
+.book-chrome-progress {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+#btn-close-book {
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+#book-modal :focus-visible {
+  outline: 2px solid #efd699;
+  outline-offset: 2px;
+}
+
+.book-floating-stage,
+.physical-binder,
+.book-floating-stage.has-floating-card .physical-binder {
+  max-height: calc(100dvh - 106px);
+}
+
+.floating-card-wrap {
+  max-height: calc(100dvh - 116px);
+  max-width: 100%;
+  padding: 12px 6px 6px;
+  overflow-y: auto;
+}
+
+.floating-card-dismiss {
+  top: 2px;
+  right: 2px;
+}
+
+.card-flip-scene {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 820px) {
+  .book-floating-stage {
+    perspective: none;
+  }
+
+  .book-floating-stage.has-floating-card .physical-binder {
+    width: min(680px, 86vw);
+    height: min(490px, 74vh);
+  }
+
+  .book-floating-stage.has-floating-card .book-floating-card-popover {
+    inset: 52px 0 0;
+    background: rgba(9, 12, 20, 0.8);
+    transform: none;
+    animation: none;
+  }
+
+  .book-floating-stage.has-floating-card .card-flip-scene {
+    width: min(244px, 52vw, 34dvh);
+  }
+
+  .floating-card-caption {
+    width: min(300px, 80vw);
+  }
+}
+
+@media (max-width: 600px) {
+  .book-floating-backdrop {
+    padding-inline: 8px;
+  }
+
+  .book-chrome-title span,
+  .book-ambient-hint {
+    display: none;
+  }
+
+  .physical-binder,
+  .book-floating-stage.has-floating-card .physical-binder {
+    width: 95vw;
+    height: min(440px, 66dvh);
+    grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1fr);
+    padding: 7px;
+  }
+
+  .binder-page {
+    padding-inline: 6px;
+    min-width: 0;
+  }
+
+  .binder-index-tabs {
+    top: auto;
+    bottom: -43px;
+    left: 0;
+    right: 0;
+    z-index: 9;
+    justify-content: center;
+    flex-direction: row;
+  }
+
+  .binder-index-tab {
+    width: auto;
+    min-height: 36px;
+    padding: 5px 7px;
+    border: 1px solid rgba(28, 24, 18, 0.68);
+    border-radius: 5px;
+    writing-mode: horizontal-tb;
+    letter-spacing: 0.02em;
+  }
+
+  .binder-index-tab.active,
+  .binder-index-tab:hover {
+    transform: none;
+  }
+
+  .spell-reader-console {
+    gap: 6px;
+  }
+
+  .spell-crt-screen,
+  .spell-reader-slot-area {
+    padding: 5px;
+    gap: 5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .physical-binder.turn-anim-next .binder-page-right,
+  .physical-binder.turn-anim-prev .binder-page-left,
+  .book-floating-card-popover {
+    animation: none;
+  }
+
+  .card-flip-inner {
+    transition: none;
+  }
+}

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GREED ISLAND 3D — 貪婪之島</title>
+  </head>
+  <body>
+    <div id="game-root">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- 開場標題 / 進入畫面 -->
+      <div id="title-overlay" class="overlay-screen">
+        <div class="title-card">
+          <div class="ring-emblem">G·I</div>
+          <h1 class="title-logo">GREED ISLAND</h1>
+          <p class="title-sub">貪婪之島 3D — Phase 1 MVP</p>
+          <p class="title-desc">
+            戴上專用戒指，踏入念能力構成的傳說遊戲世界。<br />
+            從「起始大廳」啟程，探索草原遺跡、造訪魔法都市「瑪莎多拉」，<br />
+            召喚「BOOK！」收集你的指定口袋與咒語卡。
+          </p>
+          <div class="title-actions">
+            <button id="btn-start-game" class="gi-btn gi-btn-primary">開始冒險 / 繼續遊戲</button>
+            <button id="btn-reset-save" class="gi-btn gi-btn-ghost">清除存檔重新開始</button>
+          </div>
+          <div class="controls-hint">
+            <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動</span>
+            <span><kbd>滑鼠拖曳</kbd> 轉動視角</span>
+            <span><kbd>Shift</kbd> 衝刺</span>
+            <span><kbd>Space</kbd> 跳躍</span>
+            <span><kbd>E</kbd> 互動 / 拾取</span>
+            <span><kbd>B</kbd> 召喚 BOOK！</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 頂部與邊緣 HUD -->
+      <div id="hud" class="hidden">
+        <div class="hud-top-left">
+          <div class="zone-badge">
+            <span class="zone-dot"></span>
+            <span id="hud-zone-name">起始大廳</span>
+          </div>
+          <div class="stats-row">
+            <div class="stat-pill jenny-pill">
+              <span class="pill-label">戒尼</span>
+              <span id="hud-jenny">10,000 J</span>
+            </div>
+            <div class="stat-pill cards-pill">
+              <span class="pill-label">指定口袋</span>
+              <span id="hud-specified-count">0 / 100</span>
+            </div>
+            <div class="stat-pill free-pill">
+              <span class="pill-label">自由口袋</span>
+              <span id="hud-free-count">0 / 45</span>
+            </div>
+          </div>
+          <div class="quest-tracker" id="hud-quest">
+            <div class="quest-title">目前目標</div>
+            <div class="quest-text" id="hud-quest-text">與引導員「伊妲（Eta）」對話，並步入中央傳送陣前往貪婪之島</div>
+          </div>
+        </div>
+
+        <div class="hud-top-right">
+          <canvas id="minimap-canvas" width="168" height="168"></canvas>
+          <div class="minimap-caption">島嶼雷達</div>
+        </div>
+
+        <!-- 底部快捷列與互動提示 -->
+        <div id="interact-prompt" class="interact-prompt hidden">
+          <kbd>E</kbd> <span id="interact-prompt-text">互動</span>
+        </div>
+
+        <div class="hud-bottom-bar">
+          <button id="btn-open-book" class="action-chip">
+            <kbd>B</kbd> BOOK！集卡書
+          </button>
+          <button id="btn-open-map" class="action-chip">
+            <kbd>M</kbd> 島的地圖（同行導覽）
+          </button>
+          <button id="btn-return-lobby" class="action-chip hidden">
+            <kbd>H</kbd> 返回起始大廳
+          </button>
+          <button id="btn-toggle-audio" class="action-chip">
+            🔊 環境音：開
+          </button>
+          <button id="btn-help-toggle" class="action-chip">
+            <kbd>?</kbd> 操作說明
+          </button>
+        </div>
+      </div>
+
+      <!-- BOOK! 召喚特效文字 -->
+      <div id="book-shout-fx" class="shout-fx hidden">BOOK!!</div>
+      <div id="gain-shout-fx" class="shout-fx gain-fx hidden">GAIN!!</div>
+
+      <!-- Toast 通知區 -->
+      <div id="toast-container"></div>
+
+      <!-- 對話視窗 -->
+      <div id="dialog-modal" class="modal-backdrop hidden">
+        <div class="dialog-box">
+          <div class="dialog-speaker" id="dialog-speaker">艾蓮娜</div>
+          <div class="dialog-text" id="dialog-text"></div>
+          <div class="dialog-actions" id="dialog-actions"></div>
+        </div>
+      </div>
+
+      <!-- 瑪莎多拉咒語卡商店視窗 -->
+      <div id="shop-modal" class="modal-backdrop hidden">
+        <div class="shop-panel">
+          <div class="panel-header">
+            <div>
+              <h2>魔法都市・瑪莎多拉 咒語卡商店</h2>
+              <p class="panel-sub">「歡迎來到瑪莎多拉！每包卡包內含 3 張隨機咒語卡，全憑運氣！」</p>
+            </div>
+            <button id="btn-close-shop" class="close-btn">✕</button>
+          </div>
+          <div class="shop-balance">
+            持有戒尼：<strong id="shop-jenny">10,000 J</strong>
+          </div>
+          <div class="shop-products">
+            <div class="product-card">
+              <div class="pack-visual pack-standard">
+                <span class="pack-tag">SPELL PACK</span>
+                <span class="pack-title">標準咒語卡包</span>
+                <span class="pack-count">3 張隨機咒語卡</span>
+              </div>
+              <div class="product-info">
+                <h3>標準咒語卡包</h3>
+                <p>瑪莎多拉最暢銷的基礎卡包，有機會抽到「同行」、「磁力」、「離開」、「偷窺」等經典咒語卡。</p>
+                <button id="btn-buy-standard" class="gi-btn gi-btn-primary">購買（10,000 J）</button>
+              </div>
+            </div>
+            <div class="product-card">
+              <div class="pack-visual pack-rare">
+                <span class="pack-tag">HIGH RANK</span>
+                <span class="pack-title">特級咒語卡包</span>
+                <span class="pack-count">3 張（必出 C 級以上）</span>
+              </div>
+              <div class="product-info">
+                <h3>特級咒語卡包</h3>
+                <p>店員私藏的高機率卡包，必含至少 1 張 C 級以上高階咒語卡（如「堅牢」、「神眼」、「強奪」、「磁力」）。</p>
+                <button id="btn-buy-rare" class="gi-btn gi-btn-gold">購買（25,000 J）</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 開包結果展示區 -->
+          <div id="pack-reveal-area" class="pack-reveal hidden">
+            <div class="reveal-title">✨ 獲得以下藍框咒語卡（已自動收入自由口袋）</div>
+            <div id="pack-reveal-cards" class="reveal-cards-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOOK！無外框懸浮實體活頁集卡書 -->
+      <div id="book-modal" class="book-floating-backdrop hidden" role="dialog" aria-modal="true" aria-label="BOOK 集卡書" tabindex="-1">
+        <header class="book-chrome">
+          <div class="book-chrome-title"><strong>BOOK</strong><span>集卡書</span></div>
+          <div id="book-progress" class="book-chrome-progress" aria-live="polite"></div>
+          <button type="button" id="btn-close-book" aria-label="收起集卡書" title="收起集卡書（Esc）">×</button>
+        </header>
+        <div class="book-floating-stage" id="book-floating-stage">
+          <!-- 實體集卡書本體（封面 / 雙頁跨頁 / 書頁內原作圖鑑）＋ 實體紙質索引書籤 -->
+          <div id="book-spread-viewport" class="book-spread-viewport"></div>
+
+          <!-- 點擊卡片槽時才無框浮出的實體卡（無黑底側邊欄） -->
+          <div id="book-detail-panel" class="book-floating-card-popover hidden"></div>
+        </div>
+
+        <div class="book-ambient-hint">
+          點擊書外空白或按 <kbd>B</kbd> 收起 BOOK · <kbd>←</kbd><kbd>→</kbd> 翻頁
+        </div>
+      </div>
+
+      <!-- No.101 島的地圖（全島七大原作城市導覽與快速同行） -->
+      <div id="map-modal" class="modal-backdrop hidden">
+        <div class="shop-panel">
+          <div class="panel-header">
+            <div>
+              <h2>🗺️ No.101「島的地圖」— 貪婪之島全圖</h2>
+              <p class="panel-sub">依《獵人》原作方位配置：點選任一城市即可直接「同行」飛往現場巡禮！</p>
+            </div>
+            <button id="btn-close-map" class="close-btn">✕ 關閉 (M)</button>
+          </div>
+          <div id="map-city-grid" class="map-city-grid"></div>
+        </div>
+      </div>
+
+      <!-- 傳送轉場遮罩 -->
+      <div id="transition-flash" class="transition-flash hidden"></div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
