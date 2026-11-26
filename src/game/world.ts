@@ -10,6 +10,7 @@ import {
   IslandSurfaceMaterials,
   WindMeadowSystem,
 } from './environment/worldVisuals';
+import { createOfficialIslandTerrain } from './environment/officialIslandTerrain';
 import { buildRazorGymInterior } from './interiors/razorGym';
 import {
   ARCH_SCALE,
@@ -178,19 +179,19 @@ const RAW_ROADS: RoadSegment[] = [
   { x1: 23, z1: 106, x2: 26, z2: 92, width: 5.8 },
   { x1: 26, z1: 92, x2: 26, z2: 70, width: 6.0 },
   { x1: 1, z1: 146, x2: 26, z2: 144, width: 4.8 },
-  { x1: 26, z1: 144, x2: 48, z2: 138, width: 4.8 },
-  { x1: 48, z1: 138, x2: 64, z2: 136, width: 5.0 },
-  { x1: 64, z1: 136, x2: 80, z2: 136, width: 5.6 },
+  { x1: 26, z1: 144, x2: 48, z2: 158, width: 4.8 },
+  { x1: 48, z1: 158, x2: 64, z2: 164, width: 5.0 },
+  { x1: 64, z1: 164, x2: 80, z2: 166, width: 5.6 },
   { x1: 26, z1: 70, x2: 26, z2: 48, width: 5.6 },
   { x1: 26, z1: 48, x2: 4, z2: 36, width: 5.6 },
-  { x1: 26, z1: 70, x2: 2, z2: 74, width: 4.8 },
-  { x1: 2, z1: 74, x2: -36, z2: 88, width: 4.8 },
+  { x1: 26, z1: 70, x2: -6, z2: 108, width: 4.8 },
+  { x1: -6, z1: 108, x2: -52, z2: 136, width: 4.8 },
   { x1: 4, z1: 36, x2: -16, z2: -46, width: 5.4 },
   { x1: -16, z1: -46, x2: -42, z2: -76, width: 5.4 },
   { x1: -16, z1: -46, x2: 14, z2: -104, width: 5.4 },
   { x1: -16, z1: -46, x2: -52, z2: -26, width: 4.8 },
   { x1: 4, z1: 36, x2: 64, z2: -30, width: 5.0 },
-  { x1: -36, z1: 88, x2: -66, z2: 54, width: 4.6 },
+  { x1: -52, z1: -26, x2: -96, z2: 22, width: 4.6 },
 ];
 
 export const GI_ROADS: RoadSegment[] = RAW_ROADS.map((s) => ({
@@ -1280,33 +1281,48 @@ export class GameWorld {
     const unitSandGeo = new THREE.CylinderGeometry(1, 1.09, 2.2, 36);
     const unitFoamGeo = new THREE.RingGeometry(0.975, 1.045, 40);
 
+    const fallbackLobesGroup = new THREE.Group();
+    const fallbackLobeMeshes: THREE.Object3D[] = [];
     for (const lobe of GI_LAND_LOBES) {
       const gMesh = new THREE.Mesh(unitGrassGeo, landMaterials);
       gMesh.scale.set(lobe.rx, 1, lobe.rz);
       gMesh.position.set(lobe.x, -2.8, lobe.z);
       if (lobe.rot) gMesh.rotation.y = lobe.rot;
       gMesh.receiveShadow = true;
-      this.islandGroup.add(gMesh);
+      fallbackLobesGroup.add(gMesh);
       this.walkableTerrainMeshes.push(gMesh);
+      fallbackLobeMeshes.push(gMesh);
 
       const sMesh = new THREE.Mesh(unitSandGeo, this.surfaceMats.sandMat);
       sMesh.scale.set(lobe.rx + 18, 1, lobe.rz + 18);
       sMesh.position.set(lobe.x, -2.95, lobe.z);
       if (lobe.rot) sMesh.rotation.y = lobe.rot;
       sMesh.receiveShadow = true;
-      this.islandGroup.add(sMesh);
+      fallbackLobesGroup.add(sMesh);
       this.walkableTerrainMeshes.push(sMesh);
+      fallbackLobeMeshes.push(sMesh);
 
       const foam = new THREE.Mesh(unitFoamGeo, foamMat);
       foam.rotation.x = -Math.PI / 2;
       foam.scale.set(lobe.rx + 30, lobe.rz + 30, 1);
       foam.position.set(lobe.x, -2.72, lobe.z);
       if (lobe.rot) foam.rotation.z = -(lobe.rot ?? 0);
-      this.islandGroup.add(foam);
+      fallbackLobesGroup.add(foam);
     }
+    this.islandGroup.add(fallbackLobesGroup);
+
+    // 依官方 Greed Island 地圖 PNG 即時生成 1:1 精準輪廓 3D 島嶼地形（載入後自動替換舊橢圓陸塊）
+    const officialTerrain = createOfficialIslandTerrain(GI_MAP_BOUNDS, (landMesh) => {
+      fallbackLobesGroup.visible = false;
+      const removeSet = new Set(fallbackLobeMeshes);
+      this.walkableTerrainMeshes = this.walkableTerrainMeshes.filter((m) => !removeSet.has(m));
+      this.walkableTerrainMeshes.unshift(landMesh);
+    });
+    this.islandGroup.add(officialTerrain.group);
 
     this.animatedObjects.push((t) => {
       foamMat.opacity = 0.3 + Math.sin(t * 1.55) * 0.14;
+      officialTerrain.update(t);
       this.surfaceMats.seaTex.offset.set(t * 0.012, t * 0.008);
       this.surfaceMats.lakeTex.offset.set(-t * 0.016, t * 0.012);
     });
@@ -1570,10 +1586,16 @@ export class GameWorld {
       ) => THREE.Group
     ) => {
       const anchor = RAW_LOCATION_ANCHORS[id];
-      const origCx = anchor.x;
-      const origCz = anchor.z;
-      const wx = origCx * WORLD_SCALE;
-      const wz = origCz * WORLD_SCALE;
+      const ZONE_BUILD_ORIGINS: Record<string, { x: number; z: number }> = {
+        aiai: { x: -36, z: 88 },
+        gi_port: { x: -66, z: 54 },
+        bunzen: { x: 98, z: 136 },
+      };
+      const buildOrigin = ZONE_BUILD_ORIGINS[id] ?? anchor;
+      const origCx = buildOrigin.x;
+      const origCz = buildOrigin.z;
+      const wx = anchor.x * WORLD_SCALE;
+      const wz = anchor.z * WORLD_SCALE;
       const effectiveLoadRadius = CITY_EXPANSION_CONFIGS[id] ? loadRadius + 45 : loadRadius;
 
       this.zoneStreams.push({
@@ -1645,6 +1667,8 @@ export class GameWorld {
             id,
             origCx,
             origCz,
+            worldCx: wx,
+            worldCz: wz,
             worldSpawnPos: locDef ? locDef.spawnPos : [wx, 0, wz],
             roads: GI_ROADS,
             lakes: GI_LAKES,

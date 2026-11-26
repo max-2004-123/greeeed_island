@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CardDef, drawSpellPack, getCardDef } from '../game/cards';
 import { GI_LOCATIONS } from '../game/locations';
 import { GameState, MAX_FREE_SLOTS } from '../game/state';
-import { GameWorld, GI_LAKES, GI_LAND_LOBES, GI_MAP_BOUNDS, GI_ROADS } from '../game/world';
+import { GameWorld, GI_LAKES, GI_LAND_LOBES, GI_MAP_BOUNDS } from '../game/world';
 import { renderAuthenticCardHTML } from './cardRenderer';
 
 export interface DialogChoice {
@@ -37,6 +37,8 @@ export class HudUI {
   private minimapCtx = this.minimapCanvas.getContext('2d')!;
   private staticIslandMap: HTMLCanvasElement | null = null;
   private staticLobbyMap: HTMLCanvasElement | null = null;
+  private officialMapImg: HTMLImageElement | null = null;
+  private officialMapReady = false;
   private lastZoneLabel = '';
   private lastPromptLabel: string | null = '__init__';
 
@@ -209,63 +211,79 @@ export class HudUI {
       this.staticLobbyMap = c;
     }
 
+    if (!this.officialMapImg) {
+      const img = new Image();
+      img.onload = () => {
+        this.officialMapReady = true;
+        this.staticIslandMap = null; // 載入完成後立刻用官方彩圖重繪小地圖底圖
+      };
+      img.src = './map/greed-island-map.png';
+      this.officialMapImg = img;
+    }
+
     if (!this.staticIslandMap) {
       const c = document.createElement('canvas');
       c.width = w;
       c.height = h;
       const g = c.getContext('2d')!;
-      g.fillStyle = '#145a82';
+
+      // 深海漸層背景
+      const oceanGrad = g.createRadialGradient(w * 0.5, h * 0.5, 12, w * 0.5, h * 0.5, Math.max(w, h) * 0.72);
+      oceanGrad.addColorStop(0, '#1d73a3');
+      oceanGrad.addColorStop(1, '#0e3c5c');
+      g.fillStyle = oceanGrad;
       g.fillRect(0, 0, w, h);
 
       const spanX = GI_MAP_BOUNDS.maxX - GI_MAP_BOUNDS.minX;
       const spanZ = GI_MAP_BOUNDS.maxZ - GI_MAP_BOUNDS.minZ;
       const toX = (v: number) => ((v - GI_MAP_BOUNDS.minX) / spanX) * w;
       const toY = (v: number) => ((v - GI_MAP_BOUNDS.minZ) / spanZ) * h;
-      const toRX = (r: number) => (r / spanX) * w;
-      const toRY = (r: number) => (r / spanZ) * h;
 
-      g.fillStyle = '#d9c68f';
-      for (const l of GI_LAND_LOBES) {
-        g.beginPath();
-        g.ellipse(toX(l.x), toY(l.z), toRX(l.rx + 5), toRY(l.rz + 5), -(l.rot ?? 0), 0, Math.PI * 2);
-        g.fill();
-      }
-      g.fillStyle = '#3f7d3d';
-      for (const l of GI_LAND_LOBES) {
-        g.beginPath();
-        g.ellipse(toX(l.x), toY(l.z), toRX(l.rx), toRY(l.rz), -(l.rot ?? 0), 0, Math.PI * 2);
-        g.fill();
-      }
-      g.fillStyle = '#2ca3d4';
-      for (const lk of GI_LAKES) {
-        g.beginPath();
-        g.ellipse(toX(lk.x), toY(lk.z), toRX(lk.rx), toRY(lk.rz), 0, 0, Math.PI * 2);
-        g.fill();
-      }
-
-      // 繪製主要道路（含起點→安多奇拔曲折草原路與布恩森東南林道）
-      g.strokeStyle = 'rgba(218, 206, 174, 0.85)';
-      g.lineWidth = 1.6;
-      g.lineCap = 'round';
-      for (const seg of GI_ROADS) {
-        g.beginPath();
-        g.moveTo(toX(seg.x1), toY(seg.z1));
-        g.lineTo(toX(seg.x2), toY(seg.z2));
-        g.stroke();
+      if (this.officialMapReady && this.officialMapImg) {
+        g.drawImage(this.officialMapImg, 0, 0, w, h);
+      } else {
+        const toRX = (r: number) => (r / spanX) * w;
+        const toRY = (r: number) => (r / spanZ) * h;
+        g.fillStyle = '#d9c68f';
+        for (const l of GI_LAND_LOBES) {
+          g.beginPath();
+          g.ellipse(toX(l.x), toY(l.z), toRX(l.rx + 5), toRY(l.rz + 5), -(l.rot ?? 0), 0, Math.PI * 2);
+          g.fill();
+        }
+        g.fillStyle = '#3f7d3d';
+        for (const l of GI_LAND_LOBES) {
+          g.beginPath();
+          g.ellipse(toX(l.x), toY(l.z), toRX(l.rx), toRY(l.rz), -(l.rot ?? 0), 0, Math.PI * 2);
+          g.fill();
+        }
+        g.fillStyle = '#2ca3d4';
+        for (const lk of GI_LAKES) {
+          g.beginPath();
+          g.ellipse(toX(lk.x), toY(lk.z), toRX(lk.rx), toRY(lk.rz), 0, 0, Math.PI * 2);
+          g.fill();
+        }
       }
 
+      // 標示 12 大原作城鎮光點與高對比描邊標籤
       g.font = 'bold 7.5px sans-serif';
       g.textAlign = 'center';
       for (const loc of GI_LOCATIONS) {
         const cx = toX(loc.coords.x);
         const cz = toY(loc.coords.z);
+        g.fillStyle = 'rgba(10, 18, 30, 0.8)';
+        g.beginPath();
+        g.arc(cx, cz, 4.4, 0, Math.PI * 2);
+        g.fill();
         g.fillStyle = loc.visualTheme.mapDotHex;
         g.beginPath();
-        g.arc(cx, cz, 3.6, 0, Math.PI * 2);
+        g.arc(cx, cz, 3.2, 0, Math.PI * 2);
         g.fill();
-        g.fillStyle = '#ffffff';
         const shortName = loc.name.includes('・') ? loc.name.split('・')[1].slice(0, 4) : loc.name.slice(0, 4);
-        g.fillText(shortName, cx, cz - 4.5);
+        g.strokeStyle = 'rgba(8, 14, 24, 0.88)';
+        g.lineWidth = 2.4;
+        g.strokeText(shortName, cx, cz - 5);
+        g.fillStyle = '#ffffff';
+        g.fillText(shortName, cx, cz - 5);
       }
       this.staticIslandMap = c;
     }

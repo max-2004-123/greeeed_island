@@ -2319,3 +2319,157 @@ body.book-is-open #hud {
     transition: none;
   }
 }
+
+
+/* =========================================================================
+   No.101 島的地圖 — 官方彩圖互動視窗（左圖右清單）
+   ========================================================================= */
+.map-panel-wide {
+  width: min(1140px, 95vw) !important;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.map-modal-body {
+  display: grid;
+  grid-template-columns: minmax(300px, 430px) 1fr;
+  gap: 18px;
+  align-items: start;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.map-visual-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 453 / 640;
+  max-height: 70vh;
+  margin: 0 auto;
+  border-radius: 14px;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 45%, #1d78ab 0%, #0d3a59 75%, #08253a 100%);
+  border: 2px solid rgba(240, 198, 89, 0.55);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), inset 0 0 28px rgba(56, 228, 197, 0.14);
+}
+
+.map-official-img {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  display: block;
+  user-select: none;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.42));
+}
+
+.map-pins-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.map-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  z-index: 4;
+  transition: transform 0.16s ease;
+}
+
+.map-pin:hover,
+.map-pin.is-active {
+  transform: translate(-50%, -50%) scale(1.22);
+  z-index: 8;
+}
+
+.map-pin-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--pin-color, #ffe58f);
+  border: 2px solid #0e1624;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55), 0 0 10px var(--pin-color, #ffe58f);
+}
+
+.map-pin-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #ffffff;
+  background: rgba(10, 18, 32, 0.84);
+  border: 1px solid rgba(240, 198, 89, 0.5);
+  border-radius: 999px;
+  padding: 1px 6px;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.map-pin-player {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.map-player-pulse {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #38e4c5;
+  animation: map-player-ring 1.6s ease-out infinite;
+}
+
+.map-player-tag {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #38e4c5;
+  color: #08202c;
+  font-size: 10px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 12px rgba(56, 228, 197, 0.9);
+}
+
+@keyframes map-player-ring {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(1.85);
+    opacity: 0;
+  }
+}
+
+.map-modal-body .map-city-grid {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+@media (max-width: 820px) {
+  .map-modal-body {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+  .map-visual-stage {
+    max-width: 340px;
+    max-height: 48vh;
+  }
+  .map-modal-body .map-city-grid {
+    max-height: none;
+  }
+}

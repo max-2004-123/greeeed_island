@@ -175,17 +175,23 @@
         </div>
       </div>
 
-      <!-- No.101 島的地圖（全島七大原作城市導覽與快速同行） -->
+      <!-- No.101 島的地圖（全島 12 大原作城市互動官方彩圖與快速同行） -->
       <div id="map-modal" class="modal-backdrop hidden">
-        <div class="shop-panel">
+        <div class="shop-panel map-panel-wide">
           <div class="panel-header">
             <div>
               <h2>🗺️ No.101「島的地圖」— 貪婪之島全圖</h2>
-              <p class="panel-sub">依《獵人》原作方位配置：點選任一城市即可直接「同行」飛往現場巡禮！</p>
+              <p class="panel-sub">直接點選左側官方彩圖上的光點，或點選右側城市卡片即可「同行」飛往現場巡禮！</p>
             </div>
             <button id="btn-close-map" class="close-btn">✕ 關閉 (M)</button>
           </div>
-          <div id="map-city-grid" class="map-city-grid"></div>
+          <div class="map-modal-body">
+            <div id="map-visual-stage" class="map-visual-stage">
+              <img src="./map/greed-island-map.png" alt="貪婪之島官方地圖" class="map-official-img" draggable="false" />
+              <div id="map-pins-layer" class="map-pins-layer"></div>
+            </div>
+            <div id="map-city-grid" class="map-city-grid"></div>
+          </div>
         </div>
       </div>
 

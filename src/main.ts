@@ -5,7 +5,7 @@ import { ALL_CANON_CARDS, CardDef, drawRandomFreeItemCard, getCardDef } from './
 import { GI_LOCATIONS } from './game/locations';
 import { PlayerController } from './game/player';
 import { GameState, ZoneId } from './game/state';
-import { GameWorld, Interactable } from './game/world';
+import { GameWorld, GI_MAP_BOUNDS, Interactable } from './game/world';
 import { BookUI, SpellTargets } from './ui/book';
 import { HudUI } from './ui/hud';
 
@@ -31,6 +31,7 @@ class GreedIslandApp {
   private transitionFlashTimer: number | null = null;
   private mapModal = document.getElementById('map-modal')!;
   private mapCityGrid = document.getElementById('map-city-grid')!;
+  private mapPinsLayer = document.getElementById('map-pins-layer')!;
 
   constructor() {
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
@@ -79,7 +80,32 @@ class GreedIslandApp {
     };
 
     this.mapCityGrid.innerHTML = '';
+    this.mapPinsLayer.innerHTML = '';
+
+    const spanX = GI_MAP_BOUNDS.maxX - GI_MAP_BOUNDS.minX;
+    const spanZ = GI_MAP_BOUNDS.maxZ - GI_MAP_BOUNDS.minZ;
+    const toPctX = (x: number) => `${THREE.MathUtils.clamp(((x - GI_MAP_BOUNDS.minX) / spanX) * 100, 3, 97).toFixed(2)}%`;
+    const toPctY = (z: number) => `${THREE.MathUtils.clamp(((z - GI_MAP_BOUNDS.minZ) / spanZ) * 100, 3, 97).toFixed(2)}%`;
+
     for (const loc of GI_LOCATIONS) {
+      const teleportHere = () => {
+        this.closeIslandMap();
+        this.travelToZone('island', loc.spawnPos, loc.spawnYaw);
+        this.hud.showToast(`✈️「同行」抵達【${loc.name}】！`);
+      };
+
+      const shortName = loc.name.includes('・') ? loc.name.split('・')[1] : loc.name;
+      const pin = document.createElement('button');
+      pin.type = 'button';
+      pin.className = 'map-pin';
+      pin.style.left = toPctX(loc.coords.x);
+      pin.style.top = toPctY(loc.coords.z);
+      pin.style.setProperty('--pin-color', loc.visualTheme.mapDotHex);
+      pin.title = `同行前往：${loc.name}`;
+      pin.innerHTML = `<span class="map-pin-dot"></span><span class="map-pin-label">${shortName}</span>`;
+      pin.addEventListener('click', teleportHere);
+      this.mapPinsLayer.appendChild(pin);
+
       const card = document.createElement('div');
       card.className = 'map-city-card';
       card.innerHTML = `
@@ -89,18 +115,27 @@ class GreedIslandApp {
           <p>${loc.visualTheme.description}</p>
         </div>
       `;
+      card.addEventListener('mouseenter', () => pin.classList.add('is-active'));
+      card.addEventListener('mouseleave', () => pin.classList.remove('is-active'));
+
       const btn = document.createElement('button');
       btn.className = 'gi-btn gi-btn-primary';
       btn.style.padding = '8px 12px';
       btn.style.fontSize = '13px';
       btn.textContent = '✈️ 同行前往';
-      btn.addEventListener('click', () => {
-        this.closeIslandMap();
-        this.travelToZone('island', loc.spawnPos, loc.spawnYaw);
-        this.hud.showToast(`✈️「同行」抵達【${loc.name}】！`);
-      });
+      btn.addEventListener('click', teleportHere);
       card.appendChild(btn);
       this.mapCityGrid.appendChild(card);
+    }
+
+    if (this.world.currentZone === 'island') {
+      const playerPin = document.createElement('div');
+      playerPin.className = 'map-pin-player';
+      playerPin.style.left = toPctX(this.player.position.x);
+      playerPin.style.top = toPctY(this.player.position.z);
+      playerPin.title = '你的目前位置';
+      playerPin.innerHTML = `<span class="map-player-pulse"></span><span class="map-player-tag">你</span>`;
+      this.mapPinsLayer.appendChild(playerPin);
     }
 
     this.isMapOpen = true;

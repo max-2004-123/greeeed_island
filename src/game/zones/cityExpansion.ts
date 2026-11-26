@@ -379,6 +379,8 @@ export interface ExpandCityContext {
   id: string;
   origCx: number;
   origCz: number;
+  worldCx?: number;
+  worldCz?: number;
   worldSpawnPos: [number, number, number];
   roads: RoadSegment[];
   lakes: Array<{ x: number; z: number; rx: number; rz: number }>;
@@ -438,8 +440,8 @@ export function buildExpandedCityDistricts(ctx: ExpandCityContext): THREE.Group 
   group.name = `city_expansion_${ctx.id}`;
 
   const rand = makeSeededRand(`gi_expand_v1_${ctx.id}`);
-  const wx = ctx.origCx * WORLD_SCALE;
-  const wz = ctx.origCz * WORLD_SCALE;
+  const wx = ctx.worldCx ?? ctx.origCx * WORLD_SCALE;
+  const wz = ctx.worldCz ?? ctx.origCz * WORLD_SCALE;
 
   const toWorld = (lx: number, lz: number): [number, number] => [
     wx + (lx - ctx.origCx) * ARCH_SCALE,
