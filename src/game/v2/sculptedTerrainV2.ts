@@ -62,30 +62,33 @@ export function createSculptedTerrainV2(
   const centerX = (bounds.minX + bounds.maxX) * 0.5;
   const centerZ = (bounds.minZ + bounds.maxZ) * 0.5;
 
-  const segX = 168;
-  const segZ = 224;
+  const segX = 184;
+  const segZ = 248;
   const cols = segX + 1;
   const rows = segZ + 1;
 
-  // 預先準備陸地遮罩（初始由解析輪廓＋城鎮／道路覆蓋產生，待官方 PNG 載入後 1:1 精準重烘網格）
+  // 預先準備陸地遮罩、官方彩圖色彩場與山脈／紅岩高度場（待官方 PNG 載入後 1:1 精準重烘網格）
   const landMask = new Uint8Array(cols * rows);
   const shoreDist = new Float32Array(cols * rows);
+  const imgMountainGrid = new Float32Array(cols * rows);
+  const imgLakeGrid = new Uint8Array(cols * rows);
+  const imgColorGrid = new Float32Array(cols * rows * 3);
+  let hasOfficialColors = false;
 
-  // 輔助判斷：城鎮地基或道路（非跨水橋段）強制保底為陸地，確保所有移植城鎮 100% 穩固落地
+  // 輔助判斷：城鎮地基緊密保底為陸地，避免模糊海灣、狹長水道與近岸小島輪廓
   const townList = Object.values(V2_TOWN_PLACEMENTS);
 
   const isForcedLand = (wx: number, wz: number): boolean => {
     for (const t of townList) {
-      if (Math.hypot(wx - t.x, wz - t.z) <= t.padRadius + 14) return true;
+      if (Math.hypot(wx - t.x, wz - t.z) <= t.padRadius + 2) return true;
     }
     for (const seg of V2_ROADS) {
       const { d } = distToSegment2D(wx, wz, seg.x1, seg.z1, seg.x2, seg.z2);
-      if (d <= seg.width * 1.15 + 6) {
-        // 橋梁下方保留水道，不強填陸地
+      if (d <= seg.width * 0.72 + 2.5) {
         let underBridge = false;
         for (const b of V2_BRIDGES) {
           const bd = distToSegment2D(wx, wz, b.x1, b.z1, b.x2, b.z2);
-          if (bd.d < b.width * 1.6 && bd.t > 0.14 && bd.t < 0.86) {
+          if (bd.d < b.width * 1.6 && bd.t > 0.12 && bd.t < 0.88) {
             underBridge = true;
             break;
           }
@@ -149,18 +152,21 @@ export function createSculptedTerrainV2(
     }
   };
 
-  /** 計算世界座標 (wx, wz) 的自然地貌高度（含山脈、起伏草原、湖盆、道路削坡與城鎮整平地基） */
-  const computeSculptedElevation = (wx: number, wz: number, sd: number): number => {
+  /** 計算世界座標 (wx, wz) 的自然地貌高度（結合官方彩圖山脈／紅岩高度場、起伏草原、湖盆、道路削坡與城鎮整平地基） */
+  const computeSculptedElevation = (wx: number, wz: number, sd: number, idx: number): number => {
     if (sd <= 0.01) return -4.6;
 
     // 1. 基礎起伏草原（南側紫蘇樹至安多奇拔之間形成柔和丘谷轉折）
     let h = 1.4 + rollingNoise(wx, wz) * 0.95;
 
     // 起始塔 → 安多奇拔之間的草原小谷（z ≈ 425 略低至 0.7m，使玩家在起始高台先見鐘樓、走下緩坡後才見城門）
-    const startValley = Math.exp(-Math.pow((wx - 28) / 56, 2) - Math.pow((wz - 426) / 38, 2));
+    const startValley = Math.exp(-Math.pow((wx - 34) / 56, 2) - Math.pow((wz - 426) / 38, 2));
     h -= startValley * 1.45;
 
-    // 2. 大型山脈與紅岩峭壁
+    // 2. 官方彩圖像素驅動之山脈與紅岩高度（1:1 對齊附圖山脈、紅岩峽谷與山島）＋輔助解析山脊
+    if (hasOfficialColors) {
+      h += imgMountainGrid[idx];
+    }
     for (const m of V2_MOUNTAIN_RIDGES) {
       const dx = wx - m.x;
       const dz = wz - m.z;
@@ -172,11 +178,15 @@ export function createSculptedTerrainV2(
       if (r < 1.15) {
         const peak = Math.pow(1 - smoothstep(0.0, 1.15, r), 1.45);
         const ridgeDetail = 0.88 + 0.12 * Math.sin(wx * 0.07 + wz * 0.05);
-        h += m.height * peak * ridgeDetail;
+        const weight = hasOfficialColors ? (m.biome === 'wooded_ridge' ? 0.95 : 0.42) : 1.0;
+        h += m.height * peak * ridgeDetail * weight;
       }
     }
 
-    // 3. 湖盆下凹
+    // 3. 湖盆下凹（同時結合官方彩圖藍湖像素與 V2_LAKES 橢圓）
+    if (imgLakeGrid[idx]) {
+      h = Math.min(h, -1.15);
+    }
     for (const lk of V2_LAKES) {
       const r = Math.hypot((wx - lk.x) / (lk.rx + 8), (wz - lk.z) / (lk.rz + 8));
       if (r < 1.0) {
@@ -236,7 +246,7 @@ export function createSculptedTerrainV2(
         const wx = bounds.minX + (ix / segX) * spanX;
         const idx = iz * cols + ix;
         const sd = shoreDist[idx];
-        const y = computeSculptedElevation(wx, wz, sd);
+        const y = computeSculptedElevation(wx, wz, sd, idx);
         heightGrid[idx] = y;
         pos.setY(idx, y);
 
@@ -289,6 +299,17 @@ export function createSculptedTerrainV2(
               THREE.MathUtils.clamp(0.25 + n * 0.02, 0.19, 0.32)
             );
           }
+        }
+        if (hasOfficialColors && y >= -0.45 && !nearRoad) {
+          // 融合 78% 官方彩圖真實地貌色階＋22% 高度／沙灘微調，讓 3D 地表森林、紅岩、山脊與平原 1:1 呼應附圖
+          const cr = imgColorGrid[idx * 3 + 0];
+          const cg = imgColorGrid[idx * 3 + 1];
+          const cb = imgColorGrid[idx * 3 + 2];
+          tmpCol.setRGB(
+            THREE.MathUtils.lerp(tmpCol.r, cr, 0.78),
+            THREE.MathUtils.lerp(tmpCol.g, cg, 0.78),
+            THREE.MathUtils.lerp(tmpCol.b, cb, 0.78)
+          );
         }
         colAttr.setXYZ(idx, tmpCol.r, tmpCol.g, tmpCol.b);
       }
@@ -371,25 +392,94 @@ export function createSculptedTerrainV2(
     ctx.drawImage(img, 0, 0);
     const data = ctx.getImageData(0, 0, iw, ih).data;
 
+    const rawMtn = new Float32Array(cols * rows);
     for (let iz = 0; iz < rows; iz++) {
       const wz = bounds.minZ + (iz / segZ) * spanZ;
       const py = Math.min(ih - 1, Math.round((iz / segZ) * (ih - 1)));
       for (let ix = 0; ix < cols; ix++) {
         const wx = bounds.minX + (ix / segX) * spanX;
         const px = Math.min(iw - 1, Math.round((ix / segX) * (iw - 1)));
-        const a = data[(py * iw + px) * 4 + 3];
+        const idx = iz * cols + ix;
+        const pIdx = (py * iw + px) * 4;
+        const r = data[pIdx];
+        const g = data[pIdx + 1];
+        const b = data[pIdx + 2];
+        const a = data[pIdx + 3];
+
         // 保留城鎮地基與道路陸地保底，同時在橋梁下方切出水道
         let underBridge = false;
-        for (const b of V2_BRIDGES) {
-          const bd = distToSegment2D(wx, wz, b.x1, b.z1, b.x2, b.z2);
-          if (bd.d < b.width * 1.45 && bd.t > 0.14 && bd.t < 0.86) {
+        for (const br of V2_BRIDGES) {
+          const bd = distToSegment2D(wx, wz, br.x1, br.z1, br.x2, br.z2);
+          if (bd.d < br.width * 1.45 && bd.t > 0.12 && bd.t < 0.88) {
             underBridge = true;
             break;
           }
         }
-        landMask[iz * cols + ix] = underBridge ? 0 : a >= 110 || isForcedLand(wx, wz) ? 1 : 0;
+        landMask[idx] = underBridge ? 0 : a >= 110 || isForcedLand(wx, wz) ? 1 : 0;
+
+        // 偵測官方附圖藍湖像素
+        const isBlueLake = a > 200 && b > 145 && b - r > 25 && g > 120;
+        imgLakeGrid[idx] = isBlueLake ? 1 : 0;
+
+        // 偵測官方附圖棕岩高山與赭紅岩台地像素（排除淡金沙灘與亮綠平原）
+        if (a >= 180 && !isBlueLake) {
+          const isRedRock = r > 130 && r - g > 24 && g > b + 12;
+          const isBrownMountain = r > 72 && r < 185 && r >= g * 0.96 && r - b > 34 && g < 148;
+          if (isRedRock) {
+            rawMtn[idx] = 20.0;
+          } else if (isBrownMountain) {
+            rawMtn[idx] = 24.0;
+          }
+        }
+
+        // 儲存官方彩圖柔和提亮後的 sRGB→線性相容色彩（3×3 平滑去噪）
+        let sr = 0;
+        let sg = 0;
+        let sb = 0;
+        let cnt = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          const ny = Math.min(ih - 1, Math.max(0, py + dy));
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = Math.min(iw - 1, Math.max(0, px + dx));
+            const ni = (ny * iw + nx) * 4;
+            if (data[ni + 3] >= 120) {
+              sr += data[ni];
+              sg += data[ni + 1];
+              sb += data[ni + 2];
+              cnt++;
+            }
+          }
+        }
+        if (cnt > 0) {
+          const lift = 1.12 / 255;
+          imgColorGrid[idx * 3 + 0] = Math.min(0.96, (sr / cnt) * lift);
+          imgColorGrid[idx * 3 + 1] = Math.min(0.96, (sg / cnt) * lift);
+          imgColorGrid[idx * 3 + 2] = Math.min(0.96, (sb / cnt) * lift);
+        } else {
+          imgColorGrid[idx * 3 + 0] = 0.85;
+          imgColorGrid[idx * 3 + 1] = 0.78;
+          imgColorGrid[idx * 3 + 2] = 0.56;
+        }
       }
     }
+
+    // 對彩圖山脈高度場執行 2 輪平滑濾波，形成自然宏偉的山麓緩坡與山脊線（杜絕尖刺）
+    const tmpMtn = new Float32Array(cols * rows);
+    for (let pass = 0; pass < 2; pass++) {
+      const src = pass === 0 ? rawMtn : tmpMtn;
+      const dst = pass === 0 ? tmpMtn : imgMountainGrid;
+      for (let iz = 1; iz < rows - 1; iz++) {
+        for (let ix = 1; ix < cols - 1; ix++) {
+          const i = iz * cols + ix;
+          dst[i] =
+            (src[i] * 4 +
+              (src[i - 1] + src[i + 1] + src[i - cols] + src[i + cols]) * 2 +
+              (src[i - cols - 1] + src[i - cols + 1] + src[i + cols - 1] + src[i + cols + 1])) /
+            16;
+        }
+      }
+    }
+    hasOfficialColors = true;
     rebuildGeometry();
 
     // 生成貼合官方海岸的動態白色浪花圈
