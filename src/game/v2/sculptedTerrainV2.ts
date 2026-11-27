@@ -17,6 +17,7 @@ export interface SculptedTerrainV2Result {
   cameraOccluders: THREE.Object3D[];
   sampleHeight: (x: number, z: number) => number;
   isOnLand: (x: number, z: number) => boolean;
+  isForestPixel: (x: number, z: number) => boolean;
   update: (t: number) => void;
 }
 
@@ -72,6 +73,7 @@ export function createSculptedTerrainV2(
   const shoreDist = new Float32Array(cols * rows);
   const imgMountainGrid = new Float32Array(cols * rows);
   const imgLakeGrid = new Uint8Array(cols * rows);
+  const imgForestGrid = new Uint8Array(cols * rows);
   const imgColorGrid = new Float32Array(cols * rows * 3);
   let hasOfficialColors = false;
 
@@ -417,9 +419,11 @@ export function createSculptedTerrainV2(
         }
         landMask[idx] = underBridge ? 0 : a >= 110 || isForcedLand(wx, wz) ? 1 : 0;
 
-        // 偵測官方附圖藍湖像素
+        // 偵測官方附圖藍湖像素與深綠密林帶像素
         const isBlueLake = a > 200 && b > 145 && b - r > 25 && g > 120;
         imgLakeGrid[idx] = isBlueLake ? 1 : 0;
+        const isDarkForest = a >= 180 && !isBlueLake && g >= 62 && g <= 138 && g > r * 1.04 && g > b * 1.85 && r < 122;
+        imgForestGrid[idx] = isDarkForest ? 1 : 0;
 
         // 偵測官方附圖棕岩高山與赭紅岩台地像素（排除淡金沙灘與亮綠平原）
         if (a >= 180 && !isBlueLake) {
@@ -546,6 +550,12 @@ export function createSculptedTerrainV2(
     const ix = Math.round(THREE.MathUtils.clamp(((x - bounds.minX) / spanX) * segX, 0, segX));
     const iz = Math.round(THREE.MathUtils.clamp(((z - bounds.minZ) / spanZ) * segZ, 0, segZ));
     return landMask[iz * cols + ix] === 1;
+  };
+
+  const isForestPixel = (x: number, z: number): boolean => {
+    const ix = Math.round(THREE.MathUtils.clamp(((x - bounds.minX) / spanX) * segX, 0, segX));
+    const iz = Math.round(THREE.MathUtils.clamp(((z - bounds.minZ) / spanZ) * segZ, 0, segZ));
+    return imgForestGrid[iz * cols + ix] === 1;
   };
 
   // 3D 貼地手繪道路帶（沿 V2_ROADS 每 4m 細分取樣 sampleHeight，完美貼合每處緩坡與山谷且自動避開橋面中段）
@@ -788,6 +798,7 @@ export function createSculptedTerrainV2(
     cameraOccluders,
     sampleHeight,
     isOnLand,
+    isForestPixel,
     update: (t: number) => {
       foamMat.opacity = 0.32 + Math.sin(t * 1.55) * 0.14;
     },

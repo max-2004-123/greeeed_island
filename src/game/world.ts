@@ -1302,7 +1302,20 @@ export class GameWorld {
 
     if (isV2Map()) {
       // === 新版地圖 v2：可步行 3D 雕塑地形（北崎嶇半島、中央平原與湖泊、西大片內灣、南狹長地峽、東南小島＋跨水橋梁＋貼地手繪道路帶） ===
-      this.v2Terrain = createSculptedTerrainV2(this.surfaceMats.roadMat);
+      this.v2Terrain = createSculptedTerrainV2(this.surfaceMats.roadMat, () => {
+        // 官方 PNG 重烘地形高度與密林遮罩完成後，同步生成 1:1 貼地森林／草花並重校 12 個野外拾取點高度
+        this.buildInstancedForestAndRocks();
+        if (this.v2Terrain) {
+          for (const item of this.islandInteractables) {
+            if (item.kind === 'pickup') {
+              const py = this.v2Terrain.sampleHeight(item.position.x, item.position.z);
+              item.position.y = py;
+              if (item.mesh) item.mesh.position.y = py + 1.1;
+            }
+          }
+        }
+        this.updateStreaming(this.lastPlayerPos, true);
+      });
       this.islandGroup.add(this.v2Terrain.group);
       this.walkableTerrainMeshes.push(this.v2Terrain.landMesh, ...this.v2Terrain.bridgeDeckMeshes);
       this.islandCircleColliders.push(...this.v2Terrain.bridgeColliders);
@@ -1327,7 +1340,6 @@ export class GameWorld {
       }
 
       this.registerZoneStreams();
-      this.buildInstancedForestAndRocks();
     } else {
       // === 舊版地圖（Legacy）：保留作為前後對照基準 ===
       const fallbackLobesGroup = new THREE.Group();
@@ -1947,7 +1959,14 @@ export class GameWorld {
     // 1. 決定性（Deterministic）種子佈點：西北密林 + 東北島林 + 布恩森除念之森 + 西南 C 型臂 + 中央林帶
     const useV2 = isV2Map();
     const treeZones = useV2
-      ? V2_FOREST_ZONES
+      ? [
+          ...V2_FOREST_ZONES,
+          // 額外依官方彩圖深綠密林帶覆蓋全島四大分區（僅在 isForestPixel 為真處長樹，1:1 還原官方森林版圖）
+          { cx: -140, cz: -280, rx: 190, rz: 170, count: 160, minH: 6.8, maxH: 11.2, requireForestMask: true },
+          { cx: 190, cz: -240, rx: 190, rz: 180, count: 160, minH: 6.8, maxH: 11.2, requireForestMask: true },
+          { cx: 170, cz: 110, rx: 180, rz: 170, count: 150, minH: 6.6, maxH: 10.8, requireForestMask: true },
+          { cx: -70, cz: 360, rx: 220, rz: 180, count: 150, minH: 6.4, maxH: 10.2, requireForestMask: true },
+        ]
       : [
           { cx: -74, cz: -124, rx: 26, rz: 24, count: 55, minH: 7.5, maxH: 12.5 }, // 西北密林（山賊之村周圍）
           { cx: -36, cz: -114, rx: 16, rz: 16, count: 28, minH: 6.5, maxH: 10.5 }, // 西北半島右叉密林
@@ -2004,6 +2023,9 @@ export class GameWorld {
         const tx = wCx + Math.cos(a) * wRx * r;
         const tz = wCz + Math.sin(a) * wRz * r;
         if (useV2 && this.v2Terrain && !this.v2Terrain.isOnLand(tx, tz)) continue;
+        if (useV2 && 'requireForestMask' in z && z.requireForestMask && this.v2Terrain && !this.v2Terrain.isForestPixel(tx, tz)) {
+          continue;
+        }
         let tooCloseToTown = false;
         if (useV2) {
           for (const t of Object.values(V2_TOWN_PLACEMENTS)) {
@@ -2025,7 +2047,7 @@ export class GameWorld {
         if (tooCloseToTown) continue;
         if (nearAnyRoad(tx, tz, useV2 ? 12.0 : 18.0)) continue;
         const ty = useV2 && this.v2Terrain ? this.v2Terrain.sampleHeight(tx, tz) : 0;
-        if (useV2 && ty < 0.2) continue;
+        if (useV2 && (ty < 0.65 || ty > 15.5)) continue;
         const th = (z.minH + rand() * (z.maxH - z.minH)) * (useV2 ? 1.45 : 1.85);
         zoneTrees.push({ x: tx, y: ty, z: tz, h: th });
       }
