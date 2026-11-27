@@ -2106,7 +2106,63 @@ export class GameWorld {
       });
     }
 
-    if (useV2) return;
+    if (useV2 && this.v2Terrain) {
+      // V2 貼地迎風搖曳草原與野花群（每株依雕塑地形高度 sampleHeight 精準落地）
+      const v2Meadows: Array<{ cx: number; cz: number; rx: number; rz: number; count: number; flowerRate: number }> = [
+        { cx: 34, cz: 432, rx: 86, rz: 72, count: 480, flowerRate: 0.24 }, // 起始塔 → 安多奇拔陽光緩坡草原
+        { cx: 140, cz: 468, rx: 72, rz: 52, count: 280, flowerRate: 0.2 }, // 布恩森獨立林道草坡
+        { cx: 18, cz: 210, rx: 68, rz: 74, count: 260, flowerRate: 0.18 }, // 地峽往魯比克塔草原
+        { cx: -140, cz: 428, rx: 74, rz: 58, count: 260, flowerRate: 0.3 }, // 西南愛愛花海半島
+        { cx: 18, cz: -40, rx: 95, rz: 75, count: 280, flowerRate: 0.2 }, // 中央開闊平原
+      ];
+      for (const mz of v2Meadows) {
+        const chunkSpots: Array<{ x: number; y: number; z: number; scale: number; isFlower: boolean }> = [];
+        for (let i = 0; i < mz.count; i++) {
+          const a = rand() * Math.PI * 2;
+          const r = Math.sqrt(rand());
+          const fx = mz.cx + Math.cos(a) * mz.rx * r;
+          const fz = mz.cz + Math.sin(a) * mz.rz * r;
+          if (!this.v2Terrain.isOnLand(fx, fz)) continue;
+          if (nearAnyRoad(fx, fz, 7.5)) continue;
+          let inTown = false;
+          for (const t of Object.values(V2_TOWN_PLACEMENTS)) {
+            if (Math.hypot(fx - t.x, fz - t.z) < t.padRadius + 3) {
+              inTown = true;
+              break;
+            }
+          }
+          if (inTown) continue;
+          let inLake = false;
+          for (const lk of GI_LAKES) {
+            if (Math.hypot((fx - lk.x) / (lk.rx + 6), (fz - lk.z) / (lk.rz + 6)) < 1) {
+              inLake = true;
+              break;
+            }
+          }
+          if (inLake) continue;
+          const fy = this.v2Terrain.sampleHeight(fx, fz);
+          if (fy < 0.35 || fy > 7.2) continue;
+          chunkSpots.push({
+            x: fx,
+            y: fy - 0.04,
+            z: fz,
+            scale: 0.85 + rand() * 0.75,
+            isFlower: rand() < mz.flowerRate,
+          });
+        }
+        if (chunkSpots.length === 0) continue;
+        const sys = createWindSwayingMeadowFlora(chunkSpots);
+        sys.group.visible = false;
+        this.islandGroup.add(sys.group);
+        this.windMeadowChunks.push({
+          cx: mz.cx,
+          cz: mz.cz,
+          cullRadius: Math.max(mz.rx, mz.rz) + 220,
+          system: sys,
+        });
+      }
+      return;
+    }
 
     // 2. 海岸與荒地苔岩巨石 InstancedMesh（含實體巨石碰撞體，絕不穿模）
     const rockCount = 72;

@@ -342,7 +342,8 @@ class GreedIslandApp {
     if (item.kind === 'interior_exit') {
       this.playTransitionFlash();
       this.world.exitInterior();
-      const ret = this.interiorReturnPos ?? [316.6, 0, -175.0];
+      const soufrabiFallback = GI_LOCATIONS.find((l) => l.id === 'soufrabi')?.spawnPos ?? [200, 0.6, -85];
+      const ret = this.interiorReturnPos ?? soufrabiFallback;
       this.player.teleportTo(ret[0], ret[1], ret[2], this.interiorReturnYaw + Math.PI);
       this.world.updateStreaming(this.player.position, true);
       this.hud.showToast('🌊 已返回「海濱都市・壽富拉比」海港！');

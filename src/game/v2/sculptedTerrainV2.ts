@@ -254,6 +254,15 @@ export function createSculptedTerrainV2(
         } else if (nearRoad) {
           tmpCol.setHex(0xd4c398); // 夯土鄉道暖色
         } else {
+          // 湖畔卵石淺灘緣
+          let nearLakeRim = false;
+          for (const lk of V2_LAKES) {
+            const lr = Math.hypot((wx - lk.x) / (lk.rx + 9), (wz - lk.z) / (lk.rz + 9));
+            if (lr < 1.08 && lr > 0.72) {
+              nearLakeRim = true;
+              break;
+            }
+          }
           // 檢查是否在紅岩荒地帶
           let isBadland = false;
           for (const m of V2_MOUNTAIN_RIDGES) {
@@ -262,7 +271,9 @@ export function createSculptedTerrainV2(
               break;
             }
           }
-          if (isBadland) {
+          if (nearLakeRim) {
+            tmpCol.setHex(0xd4c59e);
+          } else if (isBadland) {
             tmpCol.setHex(y > 6.5 ? 0xb56d45 : 0xc48b5c);
           } else if (y > 14.5) {
             tmpCol.setHex(0x8e8373); // 高山岩脊
@@ -297,8 +308,37 @@ export function createSculptedTerrainV2(
   }
   rebuildGeometry();
 
-  // 細緻草原筆觸材質（搭配頂點分色呈現動畫手繪地貌）
+  // 手繪細緻地表筆觸與柔和凹凸紋理（與頂點分色相乘，近距離呈現溫潤草地／泥土／岩紋而非平滑多邊形）
+  const detailCanvas = document.createElement('canvas');
+  detailCanvas.width = 256;
+  detailCanvas.height = 256;
+  const dctx = detailCanvas.getContext('2d')!;
+  dctx.fillStyle = '#f2f2f2';
+  dctx.fillRect(0, 0, 256, 256);
+  let dSeed = 9187;
+  const dRand = () => {
+    dSeed = (dSeed * 16807) % 2147483647;
+    return (dSeed - 1) / 2147483646;
+  };
+  for (let i = 0; i < 1600; i++) {
+    const px = dRand() * 256;
+    const py = dRand() * 256;
+    const w = 2 + dRand() * 6;
+    const h = 1.5 + dRand() * 4;
+    const v = Math.floor(212 + dRand() * 43);
+    dctx.fillStyle = `rgba(${v},${v},${v},0.38)`;
+    dctx.fillRect(px, py, w, h);
+  }
+  const detailTex = new THREE.CanvasTexture(detailCanvas);
+  detailTex.wrapS = THREE.RepeatWrapping;
+  detailTex.wrapT = THREE.RepeatWrapping;
+  detailTex.repeat.set(88, 116);
+  detailTex.anisotropy = 4;
+
   const landMat = new THREE.MeshStandardMaterial({
+    map: detailTex,
+    bumpMap: detailTex,
+    bumpScale: 0.12,
     vertexColors: true,
     roughness: 0.93,
     metalness: 0.0,
@@ -425,6 +465,17 @@ export function createSculptedTerrainV2(
     deck.receiveShadow = true;
     bg.add(deck);
     bridgeDeckMeshes.push(deck);
+
+    // 橋頭雙側平緩斜坡引道（自然銜接兩岸地形高度，消除上橋台階落差）
+    const rampLen = 7.5;
+    for (const endSign of [-1, 1]) {
+      const ramp = new THREE.Mesh(new THREE.BoxGeometry(b.width, 0.42, rampLen), deckMat);
+      ramp.position.set(0, b.deckY - 0.58, endSign * (len * 0.5 + 2.0 + rampLen * 0.44));
+      ramp.rotation.x = endSign * 0.11;
+      ramp.receiveShadow = true;
+      bg.add(ramp);
+      bridgeDeckMeshes.push(ramp);
+    }
 
     // 橋墩與兩側護欄
     const railH = 1.25;

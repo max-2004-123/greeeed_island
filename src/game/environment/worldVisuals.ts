@@ -752,7 +752,7 @@ export interface WindMeadowSystem {
 }
 
 export function createWindSwayingMeadowFlora(
-  spots: Array<{ x: number; z: number; scale: number; isFlower: boolean }>
+  spots: Array<{ x: number; y?: number; z: number; scale: number; isFlower: boolean }>
 ): WindMeadowSystem {
   const group = new THREE.Group();
   const windUniform = { value: 0 };
@@ -824,9 +824,10 @@ export function createWindSwayingMeadowFlora(
     const inst = new THREE.InstancedMesh(grassGeo, grassMat, grassSpots.length);
     inst.castShadow = false;
     inst.receiveShadow = false;
+    inst.userData.nonWalkable = true;
     for (let i = 0; i < grassSpots.length; i++) {
       const s = grassSpots[i];
-      dummy.position.set(s.x, 0.0, s.z);
+      dummy.position.set(s.x, s.y ?? 0.0, s.z);
       dummy.rotation.set(0, rand() * Math.PI * 2, 0);
       dummy.scale.set(s.scale, s.scale * (0.75 + rand() * 0.5), s.scale);
       dummy.updateMatrix();
@@ -844,9 +845,10 @@ export function createWindSwayingMeadowFlora(
     const inst = new THREE.InstancedMesh(flowerGeo, flowerMat, flowerSpots.length);
     inst.castShadow = false;
     inst.receiveShadow = false;
+    inst.userData.nonWalkable = true;
     for (let i = 0; i < flowerSpots.length; i++) {
       const s = flowerSpots[i];
-      dummy.position.set(s.x, 0.0, s.z);
+      dummy.position.set(s.x, s.y ?? 0.0, s.z);
       dummy.rotation.set(0, rand() * Math.PI * 2, 0);
       dummy.scale.set(s.scale, s.scale * (0.8 + rand() * 0.4), s.scale);
       dummy.updateMatrix();
