@@ -548,18 +548,22 @@ export function createSculptedTerrainV2(
       rGeo.computeVertexNormals();
       rGeo.computeBoundingSphere();
     }
+    for (const s of forkSignGroups) {
+      s.group.position.y = sampleHeight(s.x, s.z) - 0.16;
+    }
   };
 
-  // 主要岔路口木製方向路標（讓城鎮之間的草原與林道更具探索感）
+  // 主要岔路口木製方向路標（隨地形重烘自動更新 Y 軸，底座深埋 0.16m 絕不浮空）
   const signpostMat = new THREE.MeshStandardMaterial({ color: 0x6b4b2b, roughness: 0.88 });
   const signBoardMat = new THREE.MeshStandardMaterial({ color: 0xdcc79c, roughness: 0.82 });
   const forkSpots: Array<[number, number, number]> = [
-    [26, 452, 0.3], // 起始塔 / 安多奇拔 / 布恩森三岔口
+    [28, 452, 0.3], // 起始塔 / 安多奇拔 / 布恩森三岔口
     [16, 72, -0.4], // 魯比克塔 / 壽富拉比 / 荒地峽谷岔口
     [-16, -146, 0.5], // 荒地峽谷 / 瑪莎多拉 / 利梅洛岔口
   ];
+  const forkSignGroups: Array<{ group: THREE.Group; x: number; z: number }> = [];
   for (const [fx, fz, frot] of forkSpots) {
-    const fy = sampleHeight(fx, fz);
+    const fy = sampleHeight(fx, fz) - 0.16;
     const sp = new THREE.Group();
     sp.position.set(fx, fy, fz);
     sp.rotation.y = frot;
@@ -578,6 +582,7 @@ export function createSculptedTerrainV2(
     sp.add(arm2);
     sp.userData.nonWalkable = true;
     group.add(sp);
+    forkSignGroups.push({ group: sp, x: fx, z: fz });
   }
 
   // 建構跨水可行走橋梁（木橋／石橋＋橋柱＋依兩岸高度動態貼合的無縫斜坡引道＋欄杆碰撞體）

@@ -4,6 +4,7 @@ export interface ShisoTreeBuildContext {
   addAnimated: (fn: (t: number, dt: number) => void) => void;
   addCircleCollider: (c: { x: number; z: number; r: number }) => void;
   addCameraOccluder?: (obj: THREE.Object3D) => void;
+  getLocalGroundY?: (localX: number, localZ: number) => number;
   addInteractable: (item: {
     id: string;
     label: string;
@@ -444,19 +445,20 @@ export function buildShisoTreeZone(ctx: ShisoTreeBuildContext): THREE.Group {
 
   for (let i = 0; i < bollardCoords.length; i++) {
     const b = bollardCoords[i];
+    const by = ctx.getLocalGroundY ? ctx.getLocalGroundY(b.x, b.z) : 0;
     dummy.scale.set(1, 1, 1);
     dummy.rotation.set(0, b.yaw, 0);
 
-    dummy.position.set(b.x, 0.16, b.z);
+    dummy.position.set(b.x, by + 0.16, b.z);
     dummy.updateMatrix();
     bollardBaseInst.setMatrixAt(i, dummy.matrix);
 
-    dummy.position.set(b.x, 0.73, b.z);
+    dummy.position.set(b.x, by + 0.73, b.z);
     dummy.updateMatrix();
     bollardShaftInst.setMatrixAt(i, dummy.matrix);
 
     // 總高度：1.14 + 0.16 = 1.30m (<= 1.5m)
-    dummy.position.set(b.x, 1.18, b.z);
+    dummy.position.set(b.x, by + 1.18, b.z);
     dummy.updateMatrix();
     bollardCapInst.setMatrixAt(i, dummy.matrix);
   }
@@ -466,10 +468,11 @@ export function buildShisoTreeZone(ctx: ShisoTreeBuildContext): THREE.Group {
   }
   root.add(bollardBaseInst, bollardShaftInst, bollardCapInst);
 
-  // 6. 岔路木製指示路牌（(6.5, 142)：向北指「安多奇拔」、向東指「布恩森林道」）
+  // 6. 岔路木製指示路牌（(6.5, 142)：向北指「安多奇拔」、向東指「布恩森林道」，自動貼合 V2 起伏地形）
+  const forkY = ctx.getLocalGroundY ? ctx.getLocalGroundY(forkPos.x, forkPos.z) - 0.06 : 0;
   const forkGroup = new THREE.Group();
   forkGroup.name = 'shiso_fork_signpost';
-  forkGroup.position.set(forkPos.x, 0, forkPos.z);
+  forkGroup.position.set(forkPos.x, forkY, forkPos.z);
 
   const forkCollar = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.34, 8), bollardStoneMat);
   forkCollar.position.y = 0.17;

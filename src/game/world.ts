@@ -1758,6 +1758,14 @@ export class GameWorld {
         addAnimated: (fn) => entry.animated.push(fn),
         addCircleCollider: h.addCircleCollider,
         addCameraOccluder: (obj) => entry.cameraOccluders.push(obj),
+        getLocalGroundY: this.v2Terrain
+          ? (lx, lz) => {
+              const v2 = V2_TOWN_PLACEMENTS.shiso_tree;
+              const wx = v2.x + (lx - v2.buildOrigin.x) * ARCH_SCALE;
+              const wz = v2.z + (lz - v2.buildOrigin.z) * ARCH_SCALE;
+              return (this.v2Terrain!.sampleHeight(wx, wz) - v2.padY) / ARCH_SCALE;
+            }
+          : undefined,
         addInteractable: h.addInteractable,
       })
     );
