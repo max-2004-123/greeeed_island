@@ -1301,8 +1301,8 @@ export class GameWorld {
     const unitFoamGeo = new THREE.RingGeometry(0.975, 1.045, 40);
 
     if (isV2Map()) {
-      // === 新版地圖 v2：可步行 3D 雕塑地形（北崎嶇半島、中央平原與湖泊、西大片內灣、南狹長地峽、東南小島＋跨水橋梁） ===
-      this.v2Terrain = createSculptedTerrainV2();
+      // === 新版地圖 v2：可步行 3D 雕塑地形（北崎嶇半島、中央平原與湖泊、西大片內灣、南狹長地峽、東南小島＋跨水橋梁＋貼地手繪道路帶） ===
+      this.v2Terrain = createSculptedTerrainV2(this.surfaceMats.roadMat);
       this.islandGroup.add(this.v2Terrain.group);
       this.walkableTerrainMeshes.push(this.v2Terrain.landMesh, ...this.v2Terrain.bridgeDeckMeshes);
       this.islandCircleColliders.push(...this.v2Terrain.bridgeColliders);
@@ -2141,7 +2141,7 @@ export class GameWorld {
           }
           if (inLake) continue;
           const fy = this.v2Terrain.sampleHeight(fx, fz);
-          if (fy < 0.35 || fy > 7.2) continue;
+          if (fy < 0.85 || fy > 7.2) continue;
           chunkSpots.push({
             x: fx,
             y: fy - 0.04,

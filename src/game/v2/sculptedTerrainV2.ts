@@ -50,6 +50,7 @@ function rollingNoise(x: number, z: number): number {
  * - 道路走廊沿緩坡與谷地平滑削坡，跨水處建構真實可行走的木橋／石橋（含欄杆碰撞體）。
  */
 export function createSculptedTerrainV2(
+  roadMaterial?: THREE.Material,
   onOfficialMaskLoaded?: () => void
 ): SculptedTerrainV2Result {
   const group = new THREE.Group();
@@ -429,11 +430,157 @@ export function createSculptedTerrainV2(
     foamPlane.userData.nonWalkable = true;
     group.add(foamPlane);
 
+    refreshRoadRibbons();
     onOfficialMaskLoaded?.();
   };
   img.src = './map/greed-island-map.png';
 
-  // 建構跨水可行走橋梁（木橋／石橋＋橋柱＋兩側護欄＋碰撞體）
+  // 快速雙線性內插高度查詢（供道路帶、路標、橋頭坡道與外部即時取樣共用）
+  const sampleHeight = (x: number, z: number): number => {
+    const fx = THREE.MathUtils.clamp(((x - bounds.minX) / spanX) * segX, 0, segX - 0.001);
+    const fz = THREE.MathUtils.clamp(((z - bounds.minZ) / spanZ) * segZ, 0, segZ - 0.001);
+    const ix = Math.floor(fx);
+    const iz = Math.floor(fz);
+    const tx = fx - ix;
+    const tz = fz - iz;
+    const h00 = heightGrid[iz * cols + ix];
+    const h10 = heightGrid[iz * cols + (ix + 1)];
+    const h01 = heightGrid[(iz + 1) * cols + ix];
+    const h11 = heightGrid[(iz + 1) * cols + (ix + 1)];
+    const hx0 = h00 + (h10 - h00) * tx;
+    const hx1 = h01 + (h11 - h01) * tx;
+    return hx0 + (hx1 - hx0) * tz;
+  };
+
+  const isOnLand = (x: number, z: number): boolean => {
+    const ix = Math.round(THREE.MathUtils.clamp(((x - bounds.minX) / spanX) * segX, 0, segX));
+    const iz = Math.round(THREE.MathUtils.clamp(((z - bounds.minZ) / spanZ) * segZ, 0, segZ));
+    return landMask[iz * cols + ix] === 1;
+  };
+
+  // 3D 貼地手繪道路帶（沿 V2_ROADS 每 4m 細分取樣 sampleHeight，完美貼合每處緩坡與山谷且自動避開橋面中段）
+  const roadRibbonGroup = new THREE.Group();
+  roadRibbonGroup.name = 'v2_terrain_roads';
+  const roadGeometries: Array<{
+    geo: THREE.BufferGeometry;
+    seg: (typeof V2_ROADS)[number];
+    steps: number;
+  }> = [];
+
+  const ribbonMat = roadMaterial
+    ? roadMaterial.clone()
+    : new THREE.MeshStandardMaterial({ color: 0xd4c398, roughness: 0.9 });
+  ribbonMat.polygonOffset = true;
+  ribbonMat.polygonOffsetFactor = -2;
+  ribbonMat.polygonOffsetUnits = -2;
+
+  const isInsideBridgeDeck = (wx: number, wz: number): boolean => {
+    for (const b of V2_BRIDGES) {
+      const bd = distToSegment2D(wx, wz, b.x1, b.z1, b.x2, b.z2);
+      if (bd.d < b.width * 0.85 && bd.t > 0.08 && bd.t < 0.92) return true;
+    }
+    return false;
+  };
+
+  for (const seg of V2_ROADS) {
+    const dx = seg.x2 - seg.x1;
+    const dz = seg.z2 - seg.z1;
+    const len = Math.hypot(dx, dz);
+    if (len < 1) continue;
+    const steps = Math.max(4, Math.ceil(len / 4.0));
+    const vertCount = (steps + 1) * 2;
+    const positions = new Float32Array(vertCount * 3);
+    const uvs = new Float32Array(vertCount * 2);
+    const indices: number[] = [];
+
+    for (let i = 0; i <= steps; i++) {
+      const v = (i / steps) * (len / 7.5);
+      uvs[i * 4 + 0] = 0;
+      uvs[i * 4 + 1] = v;
+      uvs[i * 4 + 2] = 1;
+      uvs[i * 4 + 3] = v;
+      if (i < steps) {
+        const a = i * 2;
+        const b = a + 1;
+        const c = a + 2;
+        const d = a + 3;
+        indices.push(a, c, b, b, c, d);
+      }
+    }
+
+    const rGeo = new THREE.BufferGeometry();
+    rGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    rGeo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    rGeo.setIndex(indices);
+    const rMesh = new THREE.Mesh(rGeo, ribbonMat);
+    rMesh.receiveShadow = true;
+    rMesh.userData.nonWalkable = true; // 高度由下方雕塑地形統一提供，避免重複 Raycast 抖動
+    roadRibbonGroup.add(rMesh);
+    roadGeometries.push({ geo: rGeo, seg, steps });
+  }
+  group.add(roadRibbonGroup);
+
+  const refreshRoadRibbons = () => {
+    for (const { geo: rGeo, seg, steps } of roadGeometries) {
+      const dx = seg.x2 - seg.x1;
+      const dz = seg.z2 - seg.z1;
+      const len = Math.hypot(dx, dz) || 1;
+      const nx = -dz / len;
+      const nz = dx / len;
+      const halfW = seg.width * 0.52;
+      const posAttr = rGeo.attributes.position as THREE.BufferAttribute;
+
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const cx = seg.x1 + dx * t;
+        const cz = seg.z1 + dz * t;
+        const lx = cx - nx * halfW;
+        const lz = cz - nz * halfW;
+        const rx = cx + nx * halfW;
+        const rz = cz + nz * halfW;
+        const hideUnderBridge = isInsideBridgeDeck(cx, cz);
+        const yL = hideUnderBridge ? -5.0 : sampleHeight(lx, lz) + 0.055;
+        const yR = hideUnderBridge ? -5.0 : sampleHeight(rx, rz) + 0.055;
+        posAttr.setXYZ(i * 2, lx, yL, lz);
+        posAttr.setXYZ(i * 2 + 1, rx, yR, rz);
+      }
+      posAttr.needsUpdate = true;
+      rGeo.computeVertexNormals();
+      rGeo.computeBoundingSphere();
+    }
+  };
+
+  // 主要岔路口木製方向路標（讓城鎮之間的草原與林道更具探索感）
+  const signpostMat = new THREE.MeshStandardMaterial({ color: 0x6b4b2b, roughness: 0.88 });
+  const signBoardMat = new THREE.MeshStandardMaterial({ color: 0xdcc79c, roughness: 0.82 });
+  const forkSpots: Array<[number, number, number]> = [
+    [26, 452, 0.3], // 起始塔 / 安多奇拔 / 布恩森三岔口
+    [16, 72, -0.4], // 魯比克塔 / 壽富拉比 / 荒地峽谷岔口
+    [-16, -146, 0.5], // 荒地峽谷 / 瑪莎多拉 / 利梅洛岔口
+  ];
+  for (const [fx, fz, frot] of forkSpots) {
+    const fy = sampleHeight(fx, fz);
+    const sp = new THREE.Group();
+    sp.position.set(fx, fy, fz);
+    sp.rotation.y = frot;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 3.2, 8), signpostMat);
+    pole.position.y = 1.6;
+    pole.castShadow = true;
+    sp.add(pole);
+    const arm1 = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.36, 0.12), signBoardMat);
+    arm1.position.set(0.65, 2.75, 0);
+    arm1.castShadow = true;
+    sp.add(arm1);
+    const arm2 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.34, 0.12), signBoardMat);
+    arm2.position.set(-0.55, 2.25, 0.06);
+    arm2.rotation.y = 0.7;
+    arm2.castShadow = true;
+    sp.add(arm2);
+    sp.userData.nonWalkable = true;
+    group.add(sp);
+  }
+
+  // 建構跨水可行走橋梁（木橋／石橋＋橋柱＋依兩岸高度動態貼合的無縫斜坡引道＋欄杆碰撞體）
   const bridgeDeckMeshes: THREE.Object3D[] = [];
   const bridgeColliders: Array<{ x: number; z: number; r: number }> = [];
   const cameraOccluders: THREE.Object3D[] = [];
@@ -466,12 +613,29 @@ export function createSculptedTerrainV2(
     bg.add(deck);
     bridgeDeckMeshes.push(deck);
 
-    // 橋頭雙側平緩斜坡引道（自然銜接兩岸地形高度，消除上橋台階落差）
-    const rampLen = 7.5;
+    // 橋頭雙側實心深裙座斜坡引道（頂面略高於岸面杜絕草地穿出，底部深埋 2.4m 杜絕側面懸空縫）
+    const rampLen = 9.5;
+    const rampThickness = 2.6;
+    const dirX = dx / (len || 1);
+    const dirZ = dz / (len || 1);
     for (const endSign of [-1, 1]) {
-      const ramp = new THREE.Mesh(new THREE.BoxGeometry(b.width, 0.42, rampLen), deckMat);
-      ramp.position.set(0, b.deckY - 0.58, endSign * (len * 0.5 + 2.0 + rampLen * 0.44));
-      ramp.rotation.x = endSign * 0.11;
+      const endWorldX = mx + dirX * endSign * (len * 0.5 + 2.0 + rampLen);
+      const endWorldZ = mz + dirZ * endSign * (len * 0.5 + 2.0 + rampLen);
+      const midWorldX = mx + dirX * endSign * (len * 0.5 + 2.0 + rampLen * 0.5);
+      const midWorldZ = mz + dirZ * endSign * (len * 0.5 + 2.0 + rampLen * 0.5);
+      const groundAtEnd = Math.max(0.2, sampleHeight(endWorldX, endWorldZ)) + 0.16;
+      const groundAtMid = sampleHeight(midWorldX, midWorldZ) + 0.22;
+      const topAtMid = Math.max((b.deckY + groundAtEnd) * 0.5, groundAtMid);
+      const drop = b.deckY - groundAtEnd;
+      const pitch = Math.atan2(drop, rampLen);
+      const actualLen = Math.hypot(rampLen, drop) + 0.8;
+      const ramp = new THREE.Mesh(new THREE.BoxGeometry(b.width, rampThickness, actualLen), deckMat);
+      ramp.position.set(
+        0,
+        topAtMid - rampThickness * 0.5,
+        endSign * (len * 0.5 + 2.0 + rampLen * 0.5)
+      );
+      ramp.rotation.x = endSign * pitch;
       ramp.receiveShadow = true;
       bg.add(ramp);
       bridgeDeckMeshes.push(ramp);
@@ -490,8 +654,8 @@ export function createSculptedTerrainV2(
       const postCount = Math.max(4, Math.floor(len / 7));
       for (let i = 0; i <= postCount; i++) {
         const lz = -len * 0.5 + (i / postCount) * len;
-        const post = new THREE.Mesh(new THREE.BoxGeometry(0.45, railH + 0.4, 0.45), postMat);
-        post.position.set(rx, b.deckY + railH * 0.5, lz);
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.45, railH + 0.32, 0.45), postMat);
+        post.position.set(rx, b.deckY + (railH + 0.32) * 0.5 + 0.02, lz);
         post.castShadow = true;
         bg.add(post);
 
@@ -519,29 +683,7 @@ export function createSculptedTerrainV2(
   for (const b of V2_BRIDGES) {
     buildBridge(b);
   }
-
-  // 快速雙線性內插高度查詢
-  const sampleHeight = (x: number, z: number): number => {
-    const fx = THREE.MathUtils.clamp(((x - bounds.minX) / spanX) * segX, 0, segX - 0.001);
-    const fz = THREE.MathUtils.clamp(((z - bounds.minZ) / spanZ) * segZ, 0, segZ - 0.001);
-    const ix = Math.floor(fx);
-    const iz = Math.floor(fz);
-    const tx = fx - ix;
-    const tz = fz - iz;
-    const h00 = heightGrid[iz * cols + ix];
-    const h10 = heightGrid[iz * cols + (ix + 1)];
-    const h01 = heightGrid[(iz + 1) * cols + ix];
-    const h11 = heightGrid[(iz + 1) * cols + (ix + 1)];
-    const hx0 = h00 + (h10 - h00) * tx;
-    const hx1 = h01 + (h11 - h01) * tx;
-    return hx0 + (hx1 - hx0) * tz;
-  };
-
-  const isOnLand = (x: number, z: number): boolean => {
-    const ix = Math.round(THREE.MathUtils.clamp(((x - bounds.minX) / spanX) * segX, 0, segX));
-    const iz = Math.round(THREE.MathUtils.clamp(((z - bounds.minZ) / spanZ) * segZ, 0, segZ));
-    return landMask[iz * cols + ix] === 1;
-  };
+  refreshRoadRibbons();
 
   return {
     group,
