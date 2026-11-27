@@ -11,6 +11,15 @@ import {
   WindMeadowSystem,
 } from './environment/worldVisuals';
 import { createOfficialIslandTerrain } from './environment/officialIslandTerrain';
+import { isV2Map } from './mapVersion';
+import {
+  V2_FOREST_ZONES,
+  V2_LAKES,
+  V2_MAP_BOUNDS,
+  V2_ROADS,
+  V2_TOWN_PLACEMENTS,
+} from './v2/mapDataV2';
+import { createSculptedTerrainV2, SculptedTerrainV2Result } from './v2/sculptedTerrainV2';
 import { buildRazorGymInterior } from './interiors/razorGym';
 import {
   ARCH_SCALE,
@@ -132,12 +141,14 @@ interface InteriorCell {
   interactables: Interactable[];
 }
 
-export const GI_MAP_BOUNDS = {
+const LEGACY_MAP_BOUNDS = {
   minX: -125 * WORLD_SCALE,
   maxX: 145 * WORLD_SCALE,
   minZ: -150 * WORLD_SCALE,
   maxZ: 220 * WORLD_SCALE,
 } as const;
+
+export const GI_MAP_BOUNDS = isV2Map() ? V2_MAP_BOUNDS : LEGACY_MAP_BOUNDS;
 
 // 與官方垂直地圖對應的 5 倍大尺度陸塊定義
 const RAW_LAND_LOBES: Array<{ x: number; z: number; rx: number; rz: number; rot?: number }> = [
@@ -194,13 +205,15 @@ const RAW_ROADS: RoadSegment[] = [
   { x1: -52, z1: -26, x2: -96, z2: 22, width: 4.6 },
 ];
 
-export const GI_ROADS: RoadSegment[] = RAW_ROADS.map((s) => ({
+const LEGACY_ROADS: RoadSegment[] = RAW_ROADS.map((s) => ({
   x1: s.x1 * WORLD_SCALE,
   z1: s.z1 * WORLD_SCALE,
   x2: s.x2 * WORLD_SCALE,
   z2: s.z2 * WORLD_SCALE,
   width: s.width * 1.9,
 }));
+
+export const GI_ROADS: RoadSegment[] = isV2Map() ? V2_ROADS : LEGACY_ROADS;
 
 function distPointToSegment2D(px: number, pz: number, s: RoadSegment): number {
   const dx = s.x2 - s.x1;
@@ -211,7 +224,7 @@ function distPointToSegment2D(px: number, pz: number, s: RoadSegment): number {
   return Math.hypot(px - (s.x1 + t * dx), pz - (s.z1 + t * dz));
 }
 
-export const GI_LAKES: Array<{ x: number; z: number; rx: number; rz: number }> = [
+const LEGACY_LAKES: Array<{ x: number; z: number; rx: number; rz: number }> = [
   { x: -24, z: -64, rx: 11, rz: 8 },
   { x: 36, z: -60, rx: 14, rz: 9 },
   { x: -10, z: -16, rx: 9, rz: 7 },
@@ -223,6 +236,10 @@ export const GI_LAKES: Array<{ x: number; z: number; rx: number; rz: number }> =
   rx: lk.rx * WORLD_SCALE,
   rz: lk.rz * WORLD_SCALE,
 }));
+
+export const GI_LAKES: Array<{ x: number; z: number; rx: number; rz: number }> = isV2Map()
+  ? V2_LAKES
+  : LEGACY_LAKES;
 
 export class GameWorld {
   public scene: THREE.Scene;
@@ -262,6 +279,7 @@ export class GameWorld {
   private zoneStreams: ZoneStreamEntry[] = [];
   private breezeParticles?: { points: THREE.Points; update: (t: number, playerPos: THREE.Vector3) => void };
   private surfaceMats!: IslandSurfaceMaterials;
+  private v2Terrain: SculptedTerrainV2Result | null = null;
   private lastPlayerPos = new THREE.Vector3(6, 0, 174);
   private lastStreamCheckPos = new THREE.Vector3(9999, 0, 9999);
 
@@ -625,8 +643,8 @@ export class GameWorld {
       return;
     }
 
-    pos.x = THREE.MathUtils.clamp(pos.x, -610, 710);
-    pos.z = THREE.MathUtils.clamp(pos.z, -735, 1085);
+    pos.x = THREE.MathUtils.clamp(pos.x, GI_MAP_BOUNDS.minX + 15, GI_MAP_BOUNDS.maxX - 15);
+    pos.z = THREE.MathUtils.clamp(pos.z, GI_MAP_BOUNDS.minZ + 15, GI_MAP_BOUNDS.maxZ - 15);
 
     const checkCircle = (c: CircleCollider) => {
       const dx = pos.x - c.x;
@@ -734,11 +752,12 @@ export class GameWorld {
       }
     }
 
-    const rayStartY = Math.max(currentY, 0) + 2.4;
+    const approxBaseY = this.v2Terrain ? this.v2Terrain.sampleHeight(x, z) : 0;
+    const rayStartY = Math.max(currentY, approxBaseY, 0) + 3.0;
     this._groundRayOrigin.set(x, rayStartY, z);
     this._groundRaycaster.set(this._groundRayOrigin, this._groundRayDown);
     this._groundRaycaster.near = 0.05;
-    this._groundRaycaster.far = 9.5;
+    this._groundRaycaster.far = 16.0;
 
     const hits = this._groundRaycaster.intersectObjects(targets, true);
     const maxStepUp = currentY + 1.45;
@@ -773,7 +792,7 @@ export class GameWorld {
       return { groundY: hit.point.y + slopeLift, isWater };
     }
 
-    return { groundY: 0, isWater: false };
+    return { groundY: approxBaseY, isWater: false };
   }
 
   /**
@@ -1281,133 +1300,157 @@ export class GameWorld {
     const unitSandGeo = new THREE.CylinderGeometry(1, 1.09, 2.2, 36);
     const unitFoamGeo = new THREE.RingGeometry(0.975, 1.045, 40);
 
-    const fallbackLobesGroup = new THREE.Group();
-    const fallbackLobeMeshes: THREE.Object3D[] = [];
-    for (const lobe of GI_LAND_LOBES) {
-      const gMesh = new THREE.Mesh(unitGrassGeo, landMaterials);
-      gMesh.scale.set(lobe.rx, 1, lobe.rz);
-      gMesh.position.set(lobe.x, -2.8, lobe.z);
-      if (lobe.rot) gMesh.rotation.y = lobe.rot;
-      gMesh.receiveShadow = true;
-      fallbackLobesGroup.add(gMesh);
-      this.walkableTerrainMeshes.push(gMesh);
-      fallbackLobeMeshes.push(gMesh);
+    if (isV2Map()) {
+      // === 新版地圖 v2：可步行 3D 雕塑地形（北崎嶇半島、中央平原與湖泊、西大片內灣、南狹長地峽、東南小島＋跨水橋梁） ===
+      this.v2Terrain = createSculptedTerrainV2();
+      this.islandGroup.add(this.v2Terrain.group);
+      this.walkableTerrainMeshes.push(this.v2Terrain.landMesh, ...this.v2Terrain.bridgeDeckMeshes);
+      this.islandCircleColliders.push(...this.v2Terrain.bridgeColliders);
+      this.islandCameraOccluders.push(...this.v2Terrain.cameraOccluders);
 
-      const sMesh = new THREE.Mesh(unitSandGeo, this.surfaceMats.sandMat);
-      sMesh.scale.set(lobe.rx + 18, 1, lobe.rz + 18);
-      sMesh.position.set(lobe.x, -2.95, lobe.z);
-      if (lobe.rot) sMesh.rotation.y = lobe.rot;
-      sMesh.receiveShadow = true;
-      fallbackLobesGroup.add(sMesh);
-      this.walkableTerrainMeshes.push(sMesh);
-      fallbackLobeMeshes.push(sMesh);
+      this.animatedObjects.push((t) => {
+        this.v2Terrain?.update(t);
+        this.surfaceMats.seaTex.offset.set(t * 0.012, t * 0.008);
+        this.surfaceMats.lakeTex.offset.set(-t * 0.016, t * 0.012);
+      });
 
-      const foam = new THREE.Mesh(unitFoamGeo, foamMat);
-      foam.rotation.x = -Math.PI / 2;
-      foam.scale.set(lobe.rx + 30, lobe.rz + 30, 1);
-      foam.position.set(lobe.x, -2.72, lobe.z);
-      if (lobe.rot) foam.rotation.z = -(lobe.rot ?? 0);
-      fallbackLobesGroup.add(foam);
-    }
-    this.islandGroup.add(fallbackLobesGroup);
-
-    // 依官方 Greed Island 地圖 PNG 即時生成 1:1 精準輪廓 3D 島嶼地形（載入後自動替換舊橢圓陸塊）
-    const officialTerrain = createOfficialIslandTerrain(GI_MAP_BOUNDS, (landMesh) => {
-      fallbackLobesGroup.visible = false;
-      const removeSet = new Set(fallbackLobeMeshes);
-      this.walkableTerrainMeshes = this.walkableTerrainMeshes.filter((m) => !removeSet.has(m));
-      this.walkableTerrainMeshes.unshift(landMesh);
-    });
-    this.islandGroup.add(officialTerrain.group);
-
-    this.animatedObjects.push((t) => {
-      foamMat.opacity = 0.3 + Math.sin(t * 1.55) * 0.14;
-      officialTerrain.update(t);
-      this.surfaceMats.seaTex.offset.set(t * 0.012, t * 0.008);
-      this.surfaceMats.lakeTex.offset.set(-t * 0.016, t * 0.012);
-    });
-
-    // 5 座官方內陸清澈藍湖（波光水面＋岸邊卵石淺灘緣）
-    const unitLakeGeo = new THREE.CylinderGeometry(1, 1, 0.14, 28);
-    const lakeRimMat = new THREE.MeshStandardMaterial({
-      map: this.surfaceMats.rockTex,
-      color: 0xd6c7a4,
-      roughness: 0.94,
-    });
-    const unitLakeRimGeo = new THREE.CylinderGeometry(1.06, 1.12, 0.09, 28);
-    for (const lk of GI_LAKES) {
-      const rimMesh = new THREE.Mesh(unitLakeRimGeo, lakeRimMat);
-      rimMesh.scale.set(lk.rx, 1, lk.rz);
-      rimMesh.position.set(lk.x, 0.01, lk.z);
-      rimMesh.receiveShadow = true;
-      this.islandGroup.add(rimMesh);
-      this.walkableTerrainMeshes.push(rimMesh);
-
-      const lakeMesh = new THREE.Mesh(unitLakeGeo, this.surfaceMats.lakeMat);
-      lakeMesh.scale.set(lk.rx, 1, lk.rz);
-      lakeMesh.position.set(lk.x, 0.035, lk.z);
-      lakeMesh.receiveShadow = true;
-      lakeMesh.userData.isWater = true;
-      this.islandGroup.add(lakeMesh);
-      this.walkableTerrainMeshes.push(lakeMesh);
-    }
-
-    // 城鎮間手繪夯土石板鄉道網（依長度動態重複貼圖＋兩側自然路肩石緣）
-    const unitJointGeo = new THREE.CylinderGeometry(1, 1, 0.068, 16);
-    const seenJoints = new Set<string>();
-    const addJoint = (jx: number, jz: number, r: number) => {
-      const key = `${jx},${jz}`;
-      if (seenJoints.has(key)) return;
-      seenJoints.add(key);
-      const disc = new THREE.Mesh(unitJointGeo, this.surfaceMats.roadMat);
-      disc.scale.set(r, 1, r);
-      disc.position.set(jx, 0.034, jz);
-      disc.receiveShadow = true;
-      this.islandGroup.add(disc);
-      this.walkableTerrainMeshes.push(disc);
-    };
-    for (const seg of GI_ROADS) {
-      const dx = seg.x2 - seg.x1;
-      const dz = seg.z2 - seg.z1;
-      const len = Math.hypot(dx, dz);
-      const yaw = Math.atan2(dx, dz);
-      const mx = (seg.x1 + seg.x2) / 2;
-      const mz = (seg.z1 + seg.z2) / 2;
-
-      const roadGeo = new THREE.BoxGeometry(seg.width, 0.07, len);
-      // 修正頂面 UV 比例使石板與車轍紋理沿路長自然鋪排不拉扯
-      const uv = roadGeo.attributes.uv;
-      const repeatV = Math.max(1, len / 6.5);
-      for (let i = 0; i < uv.count; i++) {
-        uv.setY(i, uv.getY(i) * repeatV);
+      // V2 內陸清澈藍湖（自然嵌入下凹湖盆）
+      const unitLakeGeo = new THREE.CylinderGeometry(1, 1, 0.14, 28);
+      for (const lk of V2_LAKES) {
+        const lakeMesh = new THREE.Mesh(unitLakeGeo, this.surfaceMats.lakeMat);
+        lakeMesh.scale.set(lk.rx, 1, lk.rz);
+        lakeMesh.position.set(lk.x, lk.waterY, lk.z);
+        lakeMesh.receiveShadow = true;
+        lakeMesh.userData.isWater = true;
+        this.islandGroup.add(lakeMesh);
+        this.walkableTerrainMeshes.push(lakeMesh);
       }
-      const r = new THREE.Mesh(roadGeo, this.surfaceMats.roadMat);
-      r.position.set(mx, 0.035, mz);
-      r.rotation.y = yaw;
-      r.receiveShadow = true;
-      this.islandGroup.add(r);
-      this.walkableTerrainMeshes.push(r);
 
-      // 兩側低矮碎石路肩，讓道路自然嵌入草地
-      const curbGeo = new THREE.BoxGeometry(seg.width + 0.55, 0.036, len);
-      const curb = new THREE.Mesh(curbGeo, this.surfaceMats.roadCurbMat);
-      curb.position.set(mx, 0.018, mz);
-      curb.rotation.y = yaw;
-      curb.receiveShadow = true;
-      this.islandGroup.add(curb);
-      this.walkableTerrainMeshes.push(curb);
+      this.registerZoneStreams();
+      this.buildInstancedForestAndRocks();
+    } else {
+      // === 舊版地圖（Legacy）：保留作為前後對照基準 ===
+      const fallbackLobesGroup = new THREE.Group();
+      const fallbackLobeMeshes: THREE.Object3D[] = [];
+      for (const lobe of GI_LAND_LOBES) {
+        const gMesh = new THREE.Mesh(unitGrassGeo, landMaterials);
+        gMesh.scale.set(lobe.rx, 1, lobe.rz);
+        gMesh.position.set(lobe.x, -2.8, lobe.z);
+        if (lobe.rot) gMesh.rotation.y = lobe.rot;
+        gMesh.receiveShadow = true;
+        fallbackLobesGroup.add(gMesh);
+        this.walkableTerrainMeshes.push(gMesh);
+        fallbackLobeMeshes.push(gMesh);
 
-      addJoint(seg.x1, seg.z1, seg.width * 0.5);
-      addJoint(seg.x2, seg.z2, seg.width * 0.5);
+        const sMesh = new THREE.Mesh(unitSandGeo, this.surfaceMats.sandMat);
+        sMesh.scale.set(lobe.rx + 18, 1, lobe.rz + 18);
+        sMesh.position.set(lobe.x, -2.95, lobe.z);
+        if (lobe.rot) sMesh.rotation.y = lobe.rot;
+        sMesh.receiveShadow = true;
+        fallbackLobesGroup.add(sMesh);
+        this.walkableTerrainMeshes.push(sMesh);
+        fallbackLobeMeshes.push(sMesh);
+
+        const foam = new THREE.Mesh(unitFoamGeo, foamMat);
+        foam.rotation.x = -Math.PI / 2;
+        foam.scale.set(lobe.rx + 30, lobe.rz + 30, 1);
+        foam.position.set(lobe.x, -2.72, lobe.z);
+        if (lobe.rot) foam.rotation.z = -(lobe.rot ?? 0);
+        fallbackLobesGroup.add(foam);
+      }
+      this.islandGroup.add(fallbackLobesGroup);
+
+      const officialTerrain = createOfficialIslandTerrain(GI_MAP_BOUNDS, (landMesh) => {
+        fallbackLobesGroup.visible = false;
+        const removeSet = new Set(fallbackLobeMeshes);
+        this.walkableTerrainMeshes = this.walkableTerrainMeshes.filter((m) => !removeSet.has(m));
+        this.walkableTerrainMeshes.unshift(landMesh);
+      });
+      this.islandGroup.add(officialTerrain.group);
+
+      this.animatedObjects.push((t) => {
+        foamMat.opacity = 0.3 + Math.sin(t * 1.55) * 0.14;
+        officialTerrain.update(t);
+        this.surfaceMats.seaTex.offset.set(t * 0.012, t * 0.008);
+        this.surfaceMats.lakeTex.offset.set(-t * 0.016, t * 0.012);
+      });
+
+      // 5 座官方內陸清澈藍湖（波光水面＋岸邊卵石淺灘緣）
+      const unitLakeGeo = new THREE.CylinderGeometry(1, 1, 0.14, 28);
+      const lakeRimMat = new THREE.MeshStandardMaterial({
+        map: this.surfaceMats.rockTex,
+        color: 0xd6c7a4,
+        roughness: 0.94,
+      });
+      const unitLakeRimGeo = new THREE.CylinderGeometry(1.06, 1.12, 0.09, 28);
+      for (const lk of GI_LAKES) {
+        const rimMesh = new THREE.Mesh(unitLakeRimGeo, lakeRimMat);
+        rimMesh.scale.set(lk.rx, 1, lk.rz);
+        rimMesh.position.set(lk.x, 0.01, lk.z);
+        rimMesh.receiveShadow = true;
+        this.islandGroup.add(rimMesh);
+        this.walkableTerrainMeshes.push(rimMesh);
+
+        const lakeMesh = new THREE.Mesh(unitLakeGeo, this.surfaceMats.lakeMat);
+        lakeMesh.scale.set(lk.rx, 1, lk.rz);
+        lakeMesh.position.set(lk.x, 0.035, lk.z);
+        lakeMesh.receiveShadow = true;
+        lakeMesh.userData.isWater = true;
+        this.islandGroup.add(lakeMesh);
+        this.walkableTerrainMeshes.push(lakeMesh);
+      }
+
+      // 城鎮間手繪夯土石板鄉道網（依長度動態重複貼圖＋兩側自然路肩石緣）
+      const unitJointGeo = new THREE.CylinderGeometry(1, 1, 0.068, 16);
+      const seenJoints = new Set<string>();
+      const addJoint = (jx: number, jz: number, r: number) => {
+        const key = `${jx},${jz}`;
+        if (seenJoints.has(key)) return;
+        seenJoints.add(key);
+        const disc = new THREE.Mesh(unitJointGeo, this.surfaceMats.roadMat);
+        disc.scale.set(r, 1, r);
+        disc.position.set(jx, 0.034, jz);
+        disc.receiveShadow = true;
+        this.islandGroup.add(disc);
+        this.walkableTerrainMeshes.push(disc);
+      };
+      for (const seg of GI_ROADS) {
+        const dx = seg.x2 - seg.x1;
+        const dz = seg.z2 - seg.z1;
+        const len = Math.hypot(dx, dz);
+        const yaw = Math.atan2(dx, dz);
+        const mx = (seg.x1 + seg.x2) / 2;
+        const mz = (seg.z1 + seg.z2) / 2;
+
+        const roadGeo = new THREE.BoxGeometry(seg.width, 0.07, len);
+        const uv = roadGeo.attributes.uv;
+        const repeatV = Math.max(1, len / 6.5);
+        for (let i = 0; i < uv.count; i++) {
+          uv.setY(i, uv.getY(i) * repeatV);
+        }
+        const r = new THREE.Mesh(roadGeo, this.surfaceMats.roadMat);
+        r.position.set(mx, 0.035, mz);
+        r.rotation.y = yaw;
+        r.receiveShadow = true;
+        this.islandGroup.add(r);
+        this.walkableTerrainMeshes.push(r);
+
+        const curbGeo = new THREE.BoxGeometry(seg.width + 0.55, 0.036, len);
+        const curb = new THREE.Mesh(curbGeo, this.surfaceMats.roadCurbMat);
+        curb.position.set(mx, 0.018, mz);
+        curb.rotation.y = yaw;
+        curb.receiveShadow = true;
+        this.islandGroup.add(curb);
+        this.walkableTerrainMeshes.push(curb);
+
+        addJoint(seg.x1, seg.z1, seg.width * 0.5);
+        addJoint(seg.x2, seg.z2, seg.width * 0.5);
+      }
+
+      this.registerZoneStreams();
+      this.buildLODMountainRanges();
+      this.buildInstancedForestAndRocks();
     }
-
-    // === 12 大原作區域改為分區延遲串流（Lazy Zone Streaming + Distance Culling） ===
-    // 啟動時不再一次建構全島 12 座城鎮，而是等玩家走近或按 M「同行」抵達時才即時建構與喚醒
-    this.registerZoneStreams();
-
-    // 大尺度地貌：8 大 LOD 山脈 + 分區空間剔除森林區塊與搖曳草花區塊
-    this.buildLODMountainRanges();
-    this.buildInstancedForestAndRocks();
 
     // 12 處原作卡片光點（對應 5× 全島座標與 2× 城鎮地標偏移，保留既有 ID 確保舊存檔相容）
     const rawPickups: Array<{ id: string; zoneId: string; x: number; z: number; cardId: number; label: string }> = [
@@ -1426,16 +1469,26 @@ export class GameWorld {
     ];
 
     for (const p of rawPickups) {
-      const anchor = RAW_LOCATION_ANCHORS[p.zoneId] ?? { x: p.x, z: p.z };
-      const wx = anchor.x * WORLD_SCALE + (p.x - anchor.x) * ARCH_SCALE;
-      const wz = anchor.z * WORLD_SCALE + (p.z - anchor.z) * ARCH_SCALE;
+      let wx: number;
+      let wz: number;
+      let baseY = 0;
+      if (isV2Map() && V2_TOWN_PLACEMENTS[p.zoneId]) {
+        const v2 = V2_TOWN_PLACEMENTS[p.zoneId];
+        wx = v2.x + (p.x - v2.buildOrigin.x) * ARCH_SCALE;
+        wz = v2.z + (p.z - v2.buildOrigin.z) * ARCH_SCALE;
+        baseY = this.v2Terrain ? this.v2Terrain.sampleHeight(wx, wz) : v2.padY;
+      } else {
+        const anchor = RAW_LOCATION_ANCHORS[p.zoneId] ?? { x: p.x, z: p.z };
+        wx = anchor.x * WORLD_SCALE + (p.x - anchor.x) * ARCH_SCALE;
+        wz = anchor.z * WORLD_SCALE + (p.z - anchor.z) * ARCH_SCALE;
+      }
       const mesh = this.createPickupMesh(p.cardId);
-      mesh.position.set(wx, 1.1, wz);
+      mesh.position.set(wx, baseY + 1.1, wz);
       this.islandGroup.add(mesh);
       this.islandInteractables.push({
         id: p.id,
         label: p.label,
-        position: new THREE.Vector3(wx, 0, wz),
+        position: new THREE.Vector3(wx, baseY, wz),
         radius: 3.2,
         kind: 'pickup',
         cardId: p.cardId,
@@ -1585,18 +1638,24 @@ export class GameWorld {
         }
       ) => THREE.Group
     ) => {
+      const v2Placement = isV2Map() ? V2_TOWN_PLACEMENTS[id] : undefined;
       const anchor = RAW_LOCATION_ANCHORS[id];
       const ZONE_BUILD_ORIGINS: Record<string, { x: number; z: number }> = {
         aiai: { x: -36, z: 88 },
         gi_port: { x: -66, z: 54 },
         bunzen: { x: 98, z: 136 },
       };
-      const buildOrigin = ZONE_BUILD_ORIGINS[id] ?? anchor;
+      const buildOrigin = v2Placement ? v2Placement.buildOrigin : (ZONE_BUILD_ORIGINS[id] ?? anchor);
       const origCx = buildOrigin.x;
       const origCz = buildOrigin.z;
-      const wx = anchor.x * WORLD_SCALE;
-      const wz = anchor.z * WORLD_SCALE;
-      const effectiveLoadRadius = CITY_EXPANSION_CONFIGS[id] ? loadRadius + 45 : loadRadius;
+      const wx = v2Placement ? v2Placement.x : anchor.x * WORLD_SCALE;
+      const wz = v2Placement ? v2Placement.z : anchor.z * WORLD_SCALE;
+      const padY = v2Placement ? v2Placement.padY : 0;
+      const effectiveLoadRadius = v2Placement
+        ? Math.max(300, loadRadius * 0.78)
+        : CITY_EXPANSION_CONFIGS[id]
+          ? loadRadius + 45
+          : loadRadius;
 
       this.zoneStreams.push({
         id,
@@ -1622,7 +1681,7 @@ export class GameWorld {
 
           const wrapper = new THREE.Group();
           wrapper.name = `scaled_${id}`;
-          wrapper.position.set(wx, 0, wz);
+          wrapper.position.set(wx, padY, wz);
           wrapper.scale.setScalar(ARCH_SCALE);
           entry.group = wrapper;
 
@@ -1653,7 +1712,7 @@ export class GameWorld {
                 ...item,
                 position: new THREE.Vector3(
                   toWorldX(item.position.x),
-                  item.position.y,
+                  padY + item.position.y,
                   toWorldZ(item.position.z)
                 ),
                 radius: item.radius * 1.45,
@@ -1661,27 +1720,29 @@ export class GameWorld {
             createNpcMesh,
           });
 
-          // 依各城市專屬配置附加外環街區、環城大道、特色主題地標與外城牆
-          const locDef = GI_LOCATIONS.find((l) => l.id === id);
-          const expandedDistrict = buildExpandedCityDistricts({
-            id,
-            origCx,
-            origCz,
-            worldCx: wx,
-            worldCz: wz,
-            worldSpawnPos: locDef ? locDef.spawnPos : [wx, 0, wz],
-            roads: GI_ROADS,
-            lakes: GI_LAKES,
-            landLobes: GI_LAND_LOBES,
-            models: expandZoneModels,
-            addCircleCollider,
-            addBoxCollider,
-            addCameraOccluder: (obj) => entry.cameraOccluders.push(obj),
-            addAnimated: (fn) => entry.animated.push(fn),
-            createNpcMesh,
-          });
-          if (expandedDistrict) {
-            localGroup.add(expandedDistrict);
+          // 舊版模式附加外環擴建；v2 新版雕塑地形將既有完整城鎮精準落於整平地基，不讓外環溢出坡面
+          if (!v2Placement) {
+            const locDef = GI_LOCATIONS.find((l) => l.id === id);
+            const expandedDistrict = buildExpandedCityDistricts({
+              id,
+              origCx,
+              origCz,
+              worldCx: wx,
+              worldCz: wz,
+              worldSpawnPos: locDef ? locDef.spawnPos : [wx, 0, wz],
+              roads: GI_ROADS,
+              lakes: GI_LAKES,
+              landLobes: GI_LAND_LOBES,
+              models: expandZoneModels,
+              addCircleCollider,
+              addBoxCollider,
+              addCameraOccluder: (obj) => entry.cameraOccluders.push(obj),
+              addAnimated: (fn) => entry.animated.push(fn),
+              createNpcMesh,
+            });
+            if (expandedDistrict) {
+              localGroup.add(expandedDistrict);
+            }
           }
 
           localGroup.position.set(-origCx, 0, -origCz);
@@ -1876,17 +1937,20 @@ export class GameWorld {
   // -------------------------------------------------------------------------
   private buildInstancedForestAndRocks(): void {
     // 1. 決定性（Deterministic）種子佈點：西北密林 + 東北島林 + 布恩森除念之森 + 西南 C 型臂 + 中央林帶
-    const treeZones: Array<{ cx: number; cz: number; rx: number; rz: number; count: number; minH: number; maxH: number }> = [
-      { cx: -74, cz: -124, rx: 26, rz: 24, count: 55, minH: 7.5, maxH: 12.5 }, // 西北密林（山賊之村周圍）
-      { cx: -36, cz: -114, rx: 16, rz: 16, count: 28, minH: 6.5, maxH: 10.5 }, // 西北半島右叉密林
-      { cx: 76, cz: -104, rx: 18, rz: 16, count: 24, minH: 6.5, maxH: 10.0 },  // 東北獨立山島林
-      { cx: 118, cz: 136, rx: 14, rz: 26, count: 34, minH: 7.5, maxH: 11.5 },  // 布恩森東側除念之森
-      { cx: 40, cz: 125, rx: 18, rz: 9, count: 16, minH: 6.5, maxH: 9.8 },     // 布恩森東南林道北側林帶
-      { cx: 42, cz: 158, rx: 20, rz: 10, count: 18, minH: 6.5, maxH: 9.8 },    // 布恩森東南林道南側林帶
-      { cx: -74, cz: 26, rx: 10, rz: 24, count: 22, minH: 6.0, maxH: 9.0 },    // 西南 C 型半島林
-      { cx: -20, cz: 120, rx: 16, rz: 16, count: 18, minH: 6.5, maxH: 9.6 },   // 南陸西湖畔森林
-      { cx: 36, cz: -22, rx: 16, rz: 18, count: 25, minH: 6.5, maxH: 9.5 },    // 中部林帶
-    ];
+    const useV2 = isV2Map();
+    const treeZones = useV2
+      ? V2_FOREST_ZONES
+      : [
+          { cx: -74, cz: -124, rx: 26, rz: 24, count: 55, minH: 7.5, maxH: 12.5 }, // 西北密林（山賊之村周圍）
+          { cx: -36, cz: -114, rx: 16, rz: 16, count: 28, minH: 6.5, maxH: 10.5 }, // 西北半島右叉密林
+          { cx: 76, cz: -104, rx: 18, rz: 16, count: 24, minH: 6.5, maxH: 10.0 },  // 東北獨立山島林
+          { cx: 118, cz: 136, rx: 14, rz: 26, count: 34, minH: 7.5, maxH: 11.5 },  // 布恩森東側除念之森
+          { cx: 40, cz: 125, rx: 18, rz: 9, count: 16, minH: 6.5, maxH: 9.8 },     // 布恩森東南林道北側林帶
+          { cx: 42, cz: 158, rx: 20, rz: 10, count: 18, minH: 6.5, maxH: 9.8 },    // 布恩森東南林道南側林帶
+          { cx: -74, cz: 26, rx: 10, rz: 24, count: 22, minH: 6.0, maxH: 9.0 },    // 西南 C 型半島林
+          { cx: -20, cz: 120, rx: 16, rz: 16, count: 18, minH: 6.5, maxH: 9.6 },   // 南陸西湖畔森林
+          { cx: 36, cz: -22, rx: 16, rz: 18, count: 25, minH: 6.5, maxH: 9.5 },    // 中部林帶
+        ];
 
     let seed = 1337;
     const rand = () => {
@@ -1921,30 +1985,41 @@ export class GameWorld {
     const sunCol = new THREE.Color();
 
     for (const z of treeZones) {
-      const zoneTrees: Array<{ x: number; z: number; h: number }> = [];
-      const wCx = z.cx * WORLD_SCALE;
-      const wCz = z.cz * WORLD_SCALE;
-      const wRx = z.rx * WORLD_SCALE;
-      const wRz = z.rz * WORLD_SCALE;
+      const zoneTrees: Array<{ x: number; y: number; z: number; h: number }> = [];
+      const wCx = useV2 ? z.cx : z.cx * WORLD_SCALE;
+      const wCz = useV2 ? z.cz : z.cz * WORLD_SCALE;
+      const wRx = useV2 ? z.rx : z.rx * WORLD_SCALE;
+      const wRz = useV2 ? z.rz : z.rz * WORLD_SCALE;
       for (let i = 0; i < z.count; i++) {
         const a = rand() * Math.PI * 2;
         const r = Math.sqrt(rand());
         const tx = wCx + Math.cos(a) * wRx * r;
         const tz = wCz + Math.sin(a) * wRz * r;
-        // 避開所有擴大後城市半徑與 5× 道路走廊
+        if (useV2 && this.v2Terrain && !this.v2Terrain.isOnLand(tx, tz)) continue;
         let tooCloseToTown = false;
-        for (const [locId, anchor] of Object.entries(RAW_LOCATION_ANCHORS)) {
-          const expCfg = CITY_EXPANSION_CONFIGS[locId];
-          const clearR = expCfg ? expCfg.cityRadiusLocal * ARCH_SCALE + 14 : 76;
-          if (Math.hypot(tx - anchor.x * WORLD_SCALE, tz - anchor.z * WORLD_SCALE) < clearR) {
-            tooCloseToTown = true;
-            break;
+        if (useV2) {
+          for (const t of Object.values(V2_TOWN_PLACEMENTS)) {
+            if (Math.hypot(tx - t.x, tz - t.z) < t.padRadius + 10) {
+              tooCloseToTown = true;
+              break;
+            }
+          }
+        } else {
+          for (const [locId, anchor] of Object.entries(RAW_LOCATION_ANCHORS)) {
+            const expCfg = CITY_EXPANSION_CONFIGS[locId];
+            const clearR = expCfg ? expCfg.cityRadiusLocal * ARCH_SCALE + 14 : 76;
+            if (Math.hypot(tx - anchor.x * WORLD_SCALE, tz - anchor.z * WORLD_SCALE) < clearR) {
+              tooCloseToTown = true;
+              break;
+            }
           }
         }
         if (tooCloseToTown) continue;
-        if (nearAnyRoad(tx, tz, 18.0)) continue;
-        const th = (z.minH + rand() * (z.maxH - z.minH)) * 1.85;
-        zoneTrees.push({ x: tx, z: tz, h: th });
+        if (nearAnyRoad(tx, tz, useV2 ? 12.0 : 18.0)) continue;
+        const ty = useV2 && this.v2Terrain ? this.v2Terrain.sampleHeight(tx, tz) : 0;
+        if (useV2 && ty < 0.2) continue;
+        const th = (z.minH + rand() * (z.maxH - z.minH)) * (useV2 ? 1.45 : 1.85);
+        zoneTrees.push({ x: tx, y: ty, z: tz, h: th });
       }
       const count = zoneTrees.length;
       if (count === 0) continue;
@@ -1964,34 +2039,34 @@ export class GameWorld {
       crownCanopyInst.receiveShadow = true;
 
       for (let i = 0; i < count; i++) {
-        const { x, z: pz, h } = zoneTrees[i];
+        const { x, y: baseY, z: pz, h } = zoneTrees[i];
         trunkColliders.push({ x, z: pz, r: 0.72 });
         const yaw = rand() * Math.PI * 2;
         const leanX = (rand() - 0.5) * 0.08;
         const leanZ = (rand() - 0.5) * 0.08;
         const trunkH = h * 0.42;
-        dummy.position.set(x, trunkH * 0.48, pz);
+        dummy.position.set(x, baseY + trunkH * 0.45, pz);
         dummy.scale.set(1.25 + rand() * 0.35, trunkH, 1.25 + rand() * 0.35);
         dummy.rotation.set(leanX, yaw, leanZ);
         dummy.updateMatrix();
         trunkInst.setMatrixAt(i, dummy.matrix);
 
         const r1 = h * 0.28;
-        dummy.position.set(x - Math.cos(yaw) * r1 * 0.25, trunkH + r1 * 0.45, pz - Math.sin(yaw) * r1 * 0.25);
+        dummy.position.set(x - Math.cos(yaw) * r1 * 0.25, baseY + trunkH + r1 * 0.45, pz - Math.sin(yaw) * r1 * 0.25);
         dummy.scale.set(r1 * 1.22, r1 * 0.86, r1 * 1.15);
         dummy.rotation.set(rand() * 0.4, yaw, rand() * 0.4);
         dummy.updateMatrix();
         lowerCanopyInst.setMatrixAt(i, dummy.matrix);
 
         const r2 = h * 0.25;
-        dummy.position.set(x + Math.cos(yaw + 2.1) * r2 * 0.32, trunkH + r1 * 0.95, pz + Math.sin(yaw + 2.1) * r2 * 0.32);
+        dummy.position.set(x + Math.cos(yaw + 2.1) * r2 * 0.32, baseY + trunkH + r1 * 0.95, pz + Math.sin(yaw + 2.1) * r2 * 0.32);
         dummy.scale.set(r2 * 1.16, r2 * 0.92, r2 * 1.12);
         dummy.rotation.set(rand() * 0.4, yaw + 1.2, rand() * 0.4);
         dummy.updateMatrix();
         midCanopyInst.setMatrixAt(i, dummy.matrix);
 
         const r3 = h * 0.21;
-        dummy.position.set(x + Math.cos(yaw + 4.2) * r3 * 0.16, trunkH + r1 * 1.48, pz + Math.sin(yaw + 4.2) * r3 * 0.16);
+        dummy.position.set(x + Math.cos(yaw + 4.2) * r3 * 0.16, baseY + trunkH + r1 * 1.48, pz + Math.sin(yaw + 4.2) * r3 * 0.16);
         dummy.scale.set(r3 * 1.12, r3 * 0.88, r3 * 1.06);
         dummy.rotation.set(rand() * 0.4, yaw + 2.4, rand() * 0.4);
         dummy.updateMatrix();
@@ -2030,6 +2105,8 @@ export class GameWorld {
         colliders: trunkColliders,
       });
     }
+
+    if (useV2) return;
 
     // 2. 海岸與荒地苔岩巨石 InstancedMesh（含實體巨石碰撞體，絕不穿模）
     const rockCount = 72;

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CardDef, drawSpellPack, getCardDef } from '../game/cards';
 import { GI_LOCATIONS } from '../game/locations';
 import { GameState, MAX_FREE_SLOTS } from '../game/state';
-import { GameWorld, GI_LAKES, GI_LAND_LOBES, GI_MAP_BOUNDS } from '../game/world';
+import { GameWorld, GI_LAKES, GI_LAND_LOBES, GI_MAP_BOUNDS, GI_ROADS } from '../game/world';
 import { renderAuthenticCardHTML } from './cardRenderer';
 
 export interface DialogChoice {
@@ -262,6 +262,17 @@ export class HudUI {
           g.ellipse(toX(lk.x), toY(lk.z), toRX(lk.rx), toRY(lk.rz), 0, 0, Math.PI * 2);
           g.fill();
         }
+      }
+
+      // 疊繪單一資料源主道路網，確保小地圖與實際可行走路線 100% 同步
+      g.strokeStyle = 'rgba(245, 232, 192, 0.72)';
+      g.lineWidth = 1.4;
+      g.lineCap = 'round';
+      for (const seg of GI_ROADS) {
+        g.beginPath();
+        g.moveTo(toX(seg.x1), toY(seg.z1));
+        g.lineTo(toX(seg.x2), toY(seg.z2));
+        g.stroke();
       }
 
       // 標示 12 大原作城鎮光點與高對比描邊標籤

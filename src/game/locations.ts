@@ -1,3 +1,6 @@
+import { isV2Map } from './mapVersion';
+import { V2_TOWN_PLACEMENTS } from './v2/mapDataV2';
+
 export type CanonConfidence = 'high' | 'medium' | 'inferred';
 export type AmbientAudioProfile =
   | 'lobby'
@@ -356,8 +359,27 @@ const EXPANDED_CITY_IDS = new Set([
   'bandit_village',
 ]);
 
-/** 依全島 5 倍尺度（WORLD_SCALE）、2 倍建築尺度（ARCH_SCALE）與擴大後城市規模統一轉換之全島地點表 */
+/** 依目前啟用版本（v2 新版雕塑地形 / legacy 舊版地圖）由單一資料源統一轉換之全島地點表 */
 export const GI_LOCATIONS: LocationDef[] = RAW_GI_LOCATIONS.map((loc) => {
+  if (isV2Map()) {
+    const v2 = V2_TOWN_PLACEMENTS[loc.id];
+    if (v2) {
+      return {
+        ...loc,
+        coords: {
+          x: v2.x,
+          z: v2.z,
+          radius: v2.detectRadius,
+        },
+        spawnPos: [v2.x + v2.spawnOffset[0], v2.padY, v2.z + v2.spawnOffset[1]],
+        spawnYaw: v2.spawnYaw,
+        visualTheme: {
+          ...loc.visualTheme,
+          fogDensity: loc.visualTheme.fogDensity * 0.45,
+        },
+      };
+    }
+  }
   const ox = loc.coords.x;
   const oz = loc.coords.z;
   const wx = ox * WORLD_SCALE;

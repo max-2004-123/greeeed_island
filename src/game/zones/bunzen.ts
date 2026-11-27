@@ -174,14 +174,17 @@ export function buildBunzenZone(ctx: BunzenBuildContext): THREE.Group {
   clearingDisk.receiveShadow = true;
   bg.add(clearingDisk);
 
-  // 2. 陽光泥土主幹道（x = 64 到 x = 112，寬 6.4m 沿 z = 136）
+  // 2. 陽光泥土主幹道（x = 64 到 x = 112，寬 6.4m 沿 z = 136，埋平貼地消除直角邊唇）
   const dirtRoadMat = new THREE.MeshStandardMaterial({
     map: createSunlitDirtTexture(),
     roughness: 0.9,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const roadLen = 112 - 64; // 48m
-  const mainRoad = new THREE.Mesh(new THREE.BoxGeometry(roadLen, 0.08, 6.4), dirtRoadMat);
-  mainRoad.position.set((64 + 112) / 2, 0.04, bz);
+  const mainRoad = new THREE.Mesh(new THREE.BoxGeometry(roadLen, 0.024, 6.4), dirtRoadMat);
+  mainRoad.position.set((64 + 112) / 2, 0.012, bz);
   mainRoad.receiveShadow = true;
   bg.add(mainRoad);
 

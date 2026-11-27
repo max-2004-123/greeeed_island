@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { AmbientAudioEngine } from './game/audio';
 import { ALL_CANON_CARDS, CardDef, drawRandomFreeItemCard, getCardDef } from './game/cards';
 import { GI_LOCATIONS } from './game/locations';
+import { ACTIVE_MAP_VERSION, MapVersion, switchMapVersion } from './game/mapVersion';
 import { PlayerController } from './game/player';
 import { GameState, ZoneId } from './game/state';
 import { GameWorld, GI_MAP_BOUNDS, Interactable } from './game/world';
@@ -192,6 +193,32 @@ class GreedIslandApp {
     document.getElementById('btn-close-map')!.addEventListener('click', () => {
       this.closeIslandMap();
     });
+
+    const mapVerBtn = document.getElementById('btn-toggle-map-version');
+    if (mapVerBtn) {
+      mapVerBtn.textContent = ACTIVE_MAP_VERSION === 'v2' ? '🗺️ 新版地形 v2' : '🗺️ 舊版地圖';
+      mapVerBtn.addEventListener('click', () => {
+        const next: MapVersion = ACTIVE_MAP_VERSION === 'v2' ? 'legacy' : 'v2';
+        switchMapVersion(next);
+      });
+    }
+
+    // 供實機驗收與前後對照測試使用之除錯介面
+    const win = window as unknown as Record<string, unknown>;
+    win.__giGetMapVersion = () => ACTIVE_MAP_VERSION;
+    win.__giSetMapVersion = (ver: MapVersion) => switchMapVersion(ver);
+    win.__giGetPlayerPos = () => ({
+      x: Number(this.player.position.x.toFixed(2)),
+      y: Number(this.player.position.y.toFixed(2)),
+      z: Number(this.player.position.z.toFixed(2)),
+      yaw: Number(this.player.yaw.toFixed(3)),
+    });
+    win.__giTeleportTo = (locId: string) => {
+      const loc = GI_LOCATIONS.find((l) => l.id === locId);
+      if (!loc) return false;
+      this.travelToZone('island', loc.spawnPos, loc.spawnYaw);
+      return true;
+    };
 
     const audioBtn = document.getElementById('btn-toggle-audio')!;
     audioBtn.addEventListener('click', () => {
